@@ -26,6 +26,7 @@ async def process_data_handler(user1_id: int, user2_id: int, battle_query: Battl
   )
 
   while ActiveBattle.what_user_win is None:
-    process_battle(
-      battle_query
-    )
+    ...
+    # process_battle(
+    #   battle_query
+    # )

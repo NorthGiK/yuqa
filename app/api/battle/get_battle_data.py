@@ -73,4 +73,4 @@ async def process_battle(
   bonus: int,
   battle: ActiveBattle
   ) -> None:
-  battle.
+  ...

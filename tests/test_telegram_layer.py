@@ -22,6 +22,7 @@ from yuqa.telegram.compat import CallbackQuery, FSMContext, Message, User
 from yuqa.telegram.reply import safe_edit, send_card_preview
 from yuqa.telegram.router import (
     show_admin,
+    show_gallery,
     show_idea_collection,
     show_idea_detail,
     show_ideas,
@@ -182,6 +183,62 @@ async def test_show_cards_renders_collection_list_without_crashing() -> None:
     assert callback.message.text is not None
     assert "Коллекция" in callback.message.text
     assert "Рейна" in callback.message.text
+
+
+@pytest.mark.asyncio
+async def test_card_gallery_and_collection_paginate_after_ten_items() -> None:
+    """Gallery and collection screens should page through long card lists."""
+
+    services = TelegramServices()
+    template = CardTemplate(
+        id=1,
+        name="Рейна",
+        universe=Universe.ORIGINAL,
+        rarity=Rarity.EPIC,
+        image=ImageRef("reina.png"),
+        card_class=CardClass.MELEE,
+        base_stats=StatBlock(10, 20, 5),
+        ascended_stats=StatBlock(15, 25, 8),
+        ability=Ability(cost=0, cooldown=0),
+    )
+    await services.card_templates.add(template)
+    for template_id in range(2, 12):
+        await services.card_templates.add(
+            CardTemplate(
+                id=template_id,
+                name=f"Карта {template_id}",
+                universe=Universe.ORIGINAL,
+                rarity=Rarity.RARE,
+                image=ImageRef(f"card-{template_id}.png"),
+                card_class=CardClass.MELEE,
+                base_stats=StatBlock(10, 10, 10),
+                ascended_stats=StatBlock(15, 15, 15),
+                ability=Ability(cost=0, cooldown=0),
+            )
+        )
+    for card_id in range(1, 12):
+        await services.player_cards.add(
+            PlayerCard(id=card_id, owner_player_id=1, template_id=1)
+        )
+
+    collection_callback = CallbackQuery(from_user=User(1), message=Message(text="old"))
+    gallery_callback = CallbackQuery(from_user=User(1), message=Message(text="old"))
+
+    await show_cards(collection_callback, services, 1, page=2)
+    await show_gallery(gallery_callback, services, page=2)
+
+    assert collection_callback.message.text is not None
+    assert "2/2" in collection_callback.message.text
+    assert "Рейна" in collection_callback.message.text
+    assert "<code>11</code>" in collection_callback.message.text
+    assert "➡️" not in _button_texts(collection_callback.message.reply_markup)
+    assert "⬅️" in _button_texts(collection_callback.message.reply_markup)
+
+    assert gallery_callback.message.text is not None
+    assert "2/2" in gallery_callback.message.text
+    assert "Карта 11" in gallery_callback.message.text
+    assert "➡️" not in _button_texts(gallery_callback.message.reply_markup)
+    assert "⬅️" in _button_texts(gallery_callback.message.reply_markup)
 
 
 @pytest.mark.asyncio

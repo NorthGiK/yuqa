@@ -238,12 +238,20 @@ def profile_text(
     )
 
 
-def cards_text(cards: list[PlayerCard], templates: dict[int, CardTemplate]) -> str:
+def cards_text(
+    cards: list[PlayerCard],
+    templates: dict[int, CardTemplate],
+    page: int = 1,
+    *,
+    total_pages: int | None = None,
+) -> str:
     """Build the owned card collection screen."""
 
     if not cards:
         return "🎴 <b>Коллекция</b>\n<i>Пока пусто. Но это легко исправить баннерами и боями!</i>"
     lines = ["🎴 <b>Коллекция</b>"]
+    if total_pages is not None:
+        lines.extend([f"📄 <b>Страница:</b> <code>{page}/{total_pages}</code>", ""])
     for card in cards:
         template = templates.get(card.template_id)
         name = template.name if template else f"Шаблон #{card.template_id}"
@@ -390,20 +398,26 @@ def free_rewards_edit_guide(mode: str) -> str:
     )
 
 
-def gallery_text(templates: list[CardTemplate]) -> str:
+def gallery_text(
+    templates: list[CardTemplate],
+    page: int = 1,
+    *,
+    total_pages: int | None = None,
+) -> str:
     """Build the public gallery of card templates."""
 
     if not templates:
         return "📖 <b>Галерея карт</b>\n<i>Пока пусто.</i>"
-    return "\n".join(
+    lines = ["📖 <b>Галерея карт</b>"]
+    if total_pages is not None:
+        lines.extend([f"📄 <b>Страница:</b> <code>{page}/{total_pages}</code>", ""])
+    lines.extend(
         [
-            "📖 <b>Галерея карт</b>",
-            *[
-                f"• <b>{template.name}</b> — <code>{template.id}</code> · {template.rarity.value} · {_stats(template.base_stats)}"
-                for template in templates
-            ],
+            f"• <b>{template.name}</b> — <code>{template.id}</code> · {template.rarity.value} · {_stats(template.base_stats)}"
+            for template in templates
         ]
     )
+    return "\n".join(lines)
 
 
 def ideas_text(

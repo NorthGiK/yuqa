@@ -268,6 +268,18 @@ def _templates(services) -> dict[int, object]:
     }
 
 
+def _paginate_items(items: list[object], page: int, size: int = 10):
+    """Return a slice of items together with pagination flags."""
+
+    if not items:
+        return [], 1, False, False, 1
+    total_pages = max(1, (len(items) + size - 1) // size)
+    page = max(1, min(page, total_pages))
+    start = (page - 1) * size
+    end = start + size
+    return items[start:end], page, page > 1, page < total_pages, total_pages
+
+
 def _profile_backgrounds(services) -> dict[int, object]:
     """Return a profile-background lookup map."""
 
@@ -355,20 +367,77 @@ async def show_profile(
     )
 
 
-async def show_cards(event, services, player_id: int):
+async def show_cards(event, services, player_id: int, page: int = 1):
     """Show the card collection."""
 
-    cards = await services.list_player_cards(player_id)
+    cards = sorted(await services.list_player_cards(player_id), key=lambda card: card.id)
+    page_cards, page, has_prev, has_next, total_pages = _paginate_items(cards, page)
     await send_or_edit(
-        event, cards_text(cards, _templates(services)), cards_markup(cards)
+        event,
+        cards_text(page_cards, _templates(services), page, total_pages=total_pages),
+        cards_markup(page_cards, page, has_prev=has_prev, has_next=has_next),
     )
 
 
-async def show_gallery(event, services):
+async def show_gallery(event, services, page: int = 1):
     """Show the public gallery of all card templates."""
 
-    templates = await services.list_card_templates()
-    await send_or_edit(event, gallery_text(templates), gallery_markup(templates))
+    templates = sorted(await services.list_card_templates(), key=lambda item: item.id)
+    page_templates, page, has_prev, has_next, total_pages = _paginate_items(
+        templates, page
+    )
+    await send_or_edit(
+        event,
+        gallery_text(page_templates, page, total_pages=total_pages),
+        gallery_markup(page_templates, page, has_prev=has_prev, has_next=has_next),
+    )
+
+
+async def show_card_detail(
+    event,
+    services,
+    card_id: int,
+    player_id: int,
+    *,
+    page: int = 1,
+    scope: str = "collection",
+):
+    """Show one owned card or gallery template."""
+
+    if scope == "gallery":
+        template = await services.get_template(card_id)
+        if template is None:
+            raise DomainError("card template not found")
+        return await send_card_preview(
+            event,
+            _card_image_key(template),
+            card_template_text(template),
+            card_markup(
+                card_id,
+                False,
+                False,
+                False,
+                page=page,
+                scope="gallery",
+            ),
+        )
+    card = await services.get_card(card_id, player_id)
+    template = await services.get_template(card.template_id)
+    if template is None:
+        raise DomainError("card template not found")
+    return await send_card_preview(
+        event,
+        _card_image_key(template),
+        card_text(card, template),
+        card_markup(
+            card.id,
+            card.can_level_up(),
+            card.can_ascend(),
+            card.is_ascended,
+            page=page,
+            scope="collection",
+        ),
+    )
 
 
 async def show_ideas(event, services, player_id: int, page: int = 1):
@@ -1867,33 +1936,40 @@ def build_router(services, settings) -> Router:
         if not callback.from_user:
             return await callback.answer()
         try:
-            if callback_data.action == "open":
-                card = await services.get_card(
-                    callback_data.card_id, callback.from_user.id
+            if callback_data.action == "page":
+                if callback_data.scope == "gallery":
+                    return await show_gallery(
+                        callback, services, max(callback_data.page, 1)
+                    )
+                return await show_cards(
+                    callback, services, callback.from_user.id, max(callback_data.page, 1)
                 )
-                template = await services.get_template(card.template_id)
-                if template is None:
-                    raise DomainError("card template not found")
-                return await send_card_preview(
+            if callback_data.action == "open":
+                if callback_data.scope == "gallery":
+                    return await show_card_detail(
+                        callback,
+                        services,
+                        callback_data.card_id,
+                        callback.from_user.id,
+                        page=max(callback_data.page, 1),
+                        scope="gallery",
+                    )
+                return await show_card_detail(
                     callback,
-                    _card_image_key(template),
-                    card_text(card, template),
-                    card_markup(
-                        card.id,
-                        card.can_level_up(),
-                        card.can_ascend(),
-                        card.is_ascended,
-                    ),
+                    services,
+                    callback_data.card_id,
+                    callback.from_user.id,
+                    page=max(callback_data.page, 1),
+                    scope="collection",
                 )
             if callback_data.action == "template_open":
-                template = await services.get_template(callback_data.card_id)
-                if template is None:
-                    raise DomainError("card template not found")
-                return await send_card_preview(
+                return await show_card_detail(
                     callback,
-                    _card_image_key(template),
-                    card_template_text(template),
-                    gallery_markup(await services.list_card_templates()),
+                    services,
+                    callback_data.card_id,
+                    callback.from_user.id,
+                    page=max(callback_data.page, 1),
+                    scope="gallery",
                 )
             if callback_data.action == "level_up":
                 card = await services.get_card(
@@ -1908,7 +1984,11 @@ def build_router(services, settings) -> Router:
                     card_level_up_confirm_text(
                         player, card, template, services.card_progression.level_up_cost
                     ),
-                    card_level_up_confirm_markup(card.id),
+                    card_level_up_confirm_markup(
+                        card.id,
+                        page=max(callback_data.page, 1),
+                        scope=callback_data.scope,
+                    ),
                 )
             if callback_data.action == "confirm_level_up":
                 card = await services.level_up_card(
@@ -1931,7 +2011,12 @@ def build_router(services, settings) -> Router:
             callback,
             card_text(card, template),
             card_markup(
-                card.id, card.can_level_up(), card.can_ascend(), card.is_ascended
+                card.id,
+                card.can_level_up(),
+                card.can_ascend(),
+                card.is_ascended,
+                page=max(callback_data.page, 1),
+                scope=callback_data.scope,
             ),
         )
 

@@ -20,6 +20,8 @@ from yuqa.telegram.callbacks import (
 )
 from yuqa.telegram.compat import InlineKeyboardBuilder, InlineKeyboardMarkup
 
+_CARD_PAGE_SIZE = 10
+
 
 def _markup(buttons, sizes):
     """Build a markup from a list of button specs."""
@@ -82,33 +84,75 @@ def battle_markup(searching: bool = False) -> InlineKeyboardMarkup:
     )
 
 
-def cards_markup(cards: list[PlayerCard]) -> InlineKeyboardMarkup:
+def cards_markup(
+    cards: list[PlayerCard],
+    page: int = 1,
+    *,
+    has_prev: bool = False,
+    has_next: bool = False,
+) -> InlineKeyboardMarkup:
     """Return the card list keyboard."""
 
     buttons = [
-        (f"🎴 Карта #{card.id}", CardCallback(action="open", card_id=card.id))
+        (
+            f"🎴 Карта #{card.id}",
+            CardCallback(action="open", card_id=card.id, page=page, scope="collection"),
+        )
         for card in cards
     ]
+    if has_prev:
+        buttons.append(("⬅️", CardCallback(action="page", page=page - 1, scope="collection")))
+    if has_next:
+        buttons.append(("➡️", CardCallback(action="page", page=page + 1, scope="collection")))
     buttons.append(("⬅️ В меню", MenuCallback(section="home")))
-    return _markup(buttons, (2, 2, 1))
+    sizes = [1] * len(cards)
+    if has_prev or has_next:
+        sizes.append(2 if has_prev and has_next else 1)
+    sizes.append(1)
+    return _markup(buttons, tuple(sizes))
 
 
-def gallery_markup(templates) -> InlineKeyboardMarkup:
+def gallery_markup(
+    templates,
+    page: int = 1,
+    *,
+    has_prev: bool = False,
+    has_next: bool = False,
+) -> InlineKeyboardMarkup:
     """Return the public card gallery keyboard."""
 
     buttons = [
         (
             f"✨ {template.name}",
-            CardCallback(action="template_open", card_id=template.id),
+            CardCallback(
+                action="template_open",
+                card_id=template.id,
+                page=page,
+                scope="gallery",
+            ),
         )
         for template in templates
     ]
+    if has_prev:
+        buttons.append(("⬅️", CardCallback(action="page", page=page - 1, scope="gallery")))
+    if has_next:
+        buttons.append(("➡️", CardCallback(action="page", page=page + 1, scope="gallery")))
     buttons.append(("⬅️ В меню", MenuCallback(section="home")))
-    return _markup(buttons, (2, 2, 1))
+    sizes = [1] * len(templates)
+    if has_prev or has_next:
+        sizes.append(2 if has_prev and has_next else 1)
+    sizes.append(1)
+    return _markup(buttons, tuple(sizes))
 
 
 def card_markup(
-    card_id: int, can_level_up: bool, can_ascend: bool, is_ascended: bool
+    card_id: int,
+    can_level_up: bool,
+    can_ascend: bool,
+    is_ascended: bool,
+    *,
+    page: int = 1,
+    scope: str = "collection",
 ) -> InlineKeyboardMarkup:
     """Return a keyboard for a card detail screen."""
 
@@ -121,11 +165,18 @@ def card_markup(
         buttons.append(
             ("🔁 Сменить форму", CardCallback(action="toggle_form", card_id=card_id))
         )
-    buttons.append(("⬅️ В коллекцию", MenuCallback(section="cards")))
+    buttons.append(
+        (
+            "⬅️ В коллекцию" if scope == "collection" else "⬅️ В галерею",
+            CardCallback(action="page", card_id=card_id, page=page, scope=scope),
+        )
+    )
     return _markup(buttons, (2, 1))
 
 
-def card_level_up_confirm_markup(card_id: int) -> InlineKeyboardMarkup:
+def card_level_up_confirm_markup(
+    card_id: int, *, page: int = 1, scope: str = "collection"
+) -> InlineKeyboardMarkup:
     """Return confirmation controls for a card level-up."""
 
     return _markup(
@@ -134,7 +185,10 @@ def card_level_up_confirm_markup(card_id: int) -> InlineKeyboardMarkup:
                 "✅ Подтвердить",
                 CardCallback(action="confirm_level_up", card_id=card_id),
             ),
-            ("⬅️ Назад", CardCallback(action="open", card_id=card_id)),
+            (
+                "⬅️ Назад",
+                CardCallback(action="open", card_id=card_id, page=page, scope=scope),
+            ),
         ],
         (1, 1),
     )

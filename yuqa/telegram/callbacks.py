@@ -21,13 +21,16 @@ class CardCallback(CallbackData, prefix="card"):
     """Card list and card action callback."""
 
     action: str
-    card_id: int
+    card_id: int = 0
+    page: int = 1
+    scope: str = "collection"
 
 
 class GalleryCallback(CallbackData, prefix="gallery"):
     """Gallery-only card previews."""
 
-    card_id: int
+    card_id: int = 0
+    page: int = 1
 
 
 class ShopCallback(CallbackData, prefix="shop"):

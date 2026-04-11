@@ -12,3 +12,4 @@ yuqa.egg-info/
 # Secrets and data
 data/
 .env
+deploy_on_server.fish

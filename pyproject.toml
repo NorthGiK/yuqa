@@ -1,0 +1,35 @@
+[build-system]
+requires = ["setuptools>=69", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "yuqa"
+version = "0.2.0"
+description = "Yuqa Telegram game"
+requires-python = ">=3.14"
+dependencies = [
+  "SQLAlchemy>=2.0",
+  "psycopg[binary,pool]>=3.2",
+  "aiogram==3.27.0",
+  "python-dotenv>=1.0",
+  "alembic>=1.18.4",
+]
+
+[project.optional-dependencies]
+dev = [
+  "pytest>=9.0.3",
+  "pytest-asyncio>=1.3.0",
+  "pytest-mock>=3.15.1",
+  "ruff>=0.6",
+]
+
+[project.scripts]
+yuqa = "yuqa.main:entrypoint"
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["yuqa*"]

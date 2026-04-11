@@ -1,0 +1,14 @@
+# Cache
+__pycache__/
+.pytest_cache/
+.ruff_cache/
+
+# Tools data
+.codex
+uv.lock
+yuqa.egg-info/
+.venv/
+
+# Secrets and data
+data/
+.env

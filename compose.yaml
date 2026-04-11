@@ -1,0 +1,23 @@
+services:
+  bot:
+    image: ${YUQA_IMAGE:-yuqa:latest}
+    init: true
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      YUQA_DATA_DIR: ${YUQA_DATA_DIR:-/data}
+      DATABASE_URL: ${DATABASE_URL:-sqlite:////data/yuqa.db}
+      YUQA_AUTO_MIGRATE: ${YUQA_AUTO_MIGRATE:-true}
+    volumes:
+      - yuqa-data:/data
+    healthcheck:
+      test: ["CMD", "python", "-m", "yuqa.infrastructure.sqlalchemy.healthcheck"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+    stop_grace_period: 30s
+
+volumes:
+  yuqa-data:

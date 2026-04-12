@@ -1,6 +1,7 @@
 """Helpers that keep handler bodies short."""
 
 from yuqa.telegram.compat import (
+    CallbackQuery,
     InlineKeyboardMarkup,
     Message,
     TelegramBadRequest,
@@ -36,7 +37,7 @@ def _markup_signature(markup: object | None) -> tuple:
 
 async def safe_edit(
     message: Message, text: str, reply_markup: InlineKeyboardMarkup | None = None
-):
+) -> Message:
     """Edit a message and ignore duplicate-content Telegram errors."""
 
     if getattr(message, "text", None) == text and _markup_signature(
@@ -57,67 +58,50 @@ async def safe_edit(
 
 
 async def send_or_edit(
-    event, text: str, reply_markup: InlineKeyboardMarkup | None = None
-):
+    event: Message | CallbackQuery,
+    text: str,
+    reply_markup: InlineKeyboardMarkup | None = None,
+) -> Message | None:
     """Send a new message or update the current callback message."""
 
-    if getattr(event, "message", None) is not None and hasattr(event, "answer"):
-        await safe_edit(event.message, text, reply_markup)
+    if isinstance(event, CallbackQuery):
+        if event.message is not None:
+            await safe_edit(event.message, text, reply_markup)
         return await event.answer()
-    if hasattr(event, "answer"):
-        return await event.answer(text, reply_markup=reply_markup)
-    return None
+    return await event.answer(text, reply_markup=reply_markup)
 
 
 async def send_card_preview(
-    event,
+    event: Message | CallbackQuery,
     photo: str,
     caption: str,
     reply_markup: InlineKeyboardMarkup | None = None,
     *,
     content_type: str = "image/png",
-):
+) -> Message | None:
     """Send a card preview with an image when possible."""
 
-    if getattr(event, "message", None) is not None and hasattr(event.message, "answer_photo"):
-        if hasattr(event, "answer"):
+    sender: Message | CallbackQuery = (
+        event.message if isinstance(event, CallbackQuery) and event.message else event
+    )
+    if hasattr(sender, "answer_photo"):
+        if isinstance(event, CallbackQuery):
             await event.answer()
-        if content_type.startswith("video/") and hasattr(event.message, "answer_video"):
+        if content_type.startswith("video/") and hasattr(sender, "answer_video"):
             try:
-                return await event.message.answer_video(
+                return await sender.answer_video(
                     video=photo, caption=caption, reply_markup=reply_markup
                 )
             except TelegramBadRequest:
                 pass
         try:
-            return await event.message.answer_photo(
+            return await sender.answer_photo(
                 photo=photo, caption=caption, reply_markup=reply_markup
             )
         except TelegramBadRequest:
-            if hasattr(event.message, "answer_document"):
+            if hasattr(sender, "answer_document"):
                 try:
-                    return await event.message.answer_document(
-                        document=photo, caption=caption, reply_markup=reply_markup
-                    )
-                except TelegramBadRequest:
-                    return await send_or_edit(event, caption, reply_markup)
-            return await send_or_edit(event, caption, reply_markup)
-    if hasattr(event, "answer_photo"):
-        if content_type.startswith("video/") and hasattr(event, "answer_video"):
-            try:
-                return await event.answer_video(
-                    video=photo, caption=caption, reply_markup=reply_markup
-                )
-            except TelegramBadRequest:
-                pass
-        try:
-            return await event.answer_photo(
-                photo=photo, caption=caption, reply_markup=reply_markup
-            )
-        except TelegramBadRequest:
-            if hasattr(event, "answer_document"):
-                try:
-                    return await event.answer_document(
+                    return await sender.answer_document(
                         document=photo, caption=caption, reply_markup=reply_markup
                     )
                 except TelegramBadRequest:
@@ -127,17 +111,19 @@ async def send_card_preview(
 
 
 async def send_media_preview(
-    event,
+    event: Message | CallbackQuery,
     media_key: str,
     caption: str,
     *,
     content_type: str = "image/png",
     reply_markup: InlineKeyboardMarkup | None = None,
-):
+) -> Message | None:
     """Send an image or video preview depending on the content type."""
 
-    sender = getattr(event, "message", event)
-    if getattr(event, "message", None) is not None and hasattr(event, "answer"):
+    sender: Message | CallbackQuery = (
+        event.message if isinstance(event, CallbackQuery) and event.message else event
+    )
+    if isinstance(event, CallbackQuery):
         await event.answer()
     if content_type.startswith("video/") and hasattr(sender, "answer_video"):
         try:

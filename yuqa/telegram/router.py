@@ -42,6 +42,7 @@ from yuqa.telegram.compat import (
     Router,
 )
 from yuqa.telegram.reply import send_card_preview, send_media_preview, send_or_edit
+from yuqa.telegram.services import TelegramServices
 from yuqa.telegram.states import (
     BannerCreate,
     BannerRewardCreate,
@@ -657,7 +658,12 @@ async def show_profile_backgrounds(event, services, player_id: int):
     )
 
 
-async def show_admin(event, services, section: str = "dashboard", page: int = 1):
+async def show_admin(
+    event: CallbackQuery | Message,
+    services: TelegramServices,
+    section: str = "dashboard",
+    page: int = 1,
+) -> None:
     """Show the admin dashboard or a section page."""
 
     counts = await services.admin_counts()
@@ -1087,7 +1093,9 @@ async def capture_profile_nickname(message: Message, services, state: FSMContext
     await show_profile(message, services, message.from_user.id)
 
 
-async def start_admin_player_edit(message: Message, state: FSMContext, mode: str):
+async def start_admin_player_edit(
+    message: Message, state: FSMContext, mode: str
+) -> Message:
     """Open the admin flow for player-specific cosmetics."""
 
     await state.clear()
@@ -1104,7 +1112,7 @@ async def start_admin_player_edit(message: Message, state: FSMContext, mode: str
     )
 
 
-async def start_admin_player_delete(message: Message, state: FSMContext):
+async def start_admin_player_delete(message: Message, state: FSMContext) -> Message:
     """Open the admin flow for deleting a player."""
 
     await state.clear()
@@ -1115,11 +1123,11 @@ async def start_admin_player_delete(message: Message, state: FSMContext):
     )
 
 
-async def capture_admin_player_id(message: Message, state: FSMContext):
+async def capture_admin_player_id(message: Message, state: FSMContext) -> Message:
     """Store the target player id and ask for the value."""
 
     player_id = _parse_int(message.text or "0", "player id", positive=True)
-    data = await state.get_data()
+    data: dict[str, object] = await state.get_data()
     await state.update_data(player_id=player_id)
     await state.set_state(AdminPlayerEdit.value)
     if data.get("mode") == "creator_points":
@@ -1133,7 +1141,9 @@ async def capture_admin_player_id(message: Message, state: FSMContext):
     )
 
 
-async def capture_admin_player_delete(message: Message, services, state: FSMContext):
+async def capture_admin_player_delete(
+    message: Message, services: TelegramServices, state: FSMContext
+) -> Message | None:
     """Delete the selected player."""
 
     player_id = _parse_int(message.text or "0", "player id", positive=True)
@@ -1147,18 +1157,21 @@ async def capture_admin_player_delete(message: Message, services, state: FSMCont
     await show_admin(message, services, "players")
 
 
-async def capture_admin_player_value(message: Message, services, state: FSMContext):
+async def capture_admin_player_value(
+    message: Message, services: TelegramServices, state: FSMContext
+) -> Message | None:
     """Apply the admin edit to the selected player."""
 
-    data = await state.get_data()
+    data: dict[str, object] = await state.get_data()
     player_id = data.get("player_id")
-    if not player_id:
+    if not isinstance(player_id, int):
         await state.clear()
         return await message.answer("❌ player id is missing")
+    mode = data.get("mode")
     try:
-        if data.get("mode") == "creator_points":
+        if mode == "creator_points":
             player = await services.add_creator_points(
-                int(player_id),
+                player_id,
                 _parse_int(message.text or "0", "creator points", positive=True),
             )
             notice = (
@@ -1166,7 +1179,7 @@ async def capture_admin_player_value(message: Message, services, state: FSMConte
                 f"<code>{player.creator_points}</code> Creator Points."
             )
         else:
-            player = await services.set_player_title(int(player_id), message.text)
+            player = await services.set_player_title(player_id, message.text)
             notice = f"✅ Титул игрока <code>{player.telegram_id}</code> обновлён."
     except (DomainError, ValidationError, ValueError) as error:
         await state.clear()

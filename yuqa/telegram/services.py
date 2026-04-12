@@ -374,7 +374,7 @@ class TelegramServices:
     async def list_battle_pass_seasons(self) -> list[BattlePassSeason]:
         """Return every stored battle pass season sorted by dates."""
 
-        seasons = list(getattr(self.battle_pass_seasons, "items", {}).values())
+        seasons: list[BattlePassSeason] = list(getattr(self.battle_pass_seasons, "items", {}).values())
         return sorted(seasons, key=lambda season: (season.start_at, season.id), reverse=True)
 
     async def create_battle_pass_season(
@@ -533,18 +533,18 @@ class TelegramServices:
     async def delete_player(self, telegram_id: int) -> Player:
         """Delete a player and clean up related runtime state."""
 
-        player = await self.get_player(telegram_id)
+        player: Player | None = await self.get_player(telegram_id)
         if player is None:
             raise EntityNotFoundError("player not found")
 
-        clan = await self.player_clan(player)
+        clan: Clan | None = await self.player_clan(player)
         if clan is not None:
             clan.remove_member(telegram_id)
             if clan.owner_player_id == telegram_id:
                 for member_id in list(clan.members):
                     if member_id == telegram_id:
                         continue
-                    member = await self.players.get_by_id(member_id)
+                    member: Player | None = await self.players.get_by_id(member_id)
                     if member is not None:
                         member.clan_id = None
                         await self.players.save(member)
@@ -552,13 +552,13 @@ class TelegramServices:
             else:
                 await self.clans.save(clan)
 
-        for card_id, card in list(self.player_cards.items.items()):
-            if card.owner_player_id == telegram_id:
+        for card_id, player_card in list(self.player_cards.items.items()):
+            if player_card.owner_player_id == telegram_id:
                 await self.player_cards.delete(card_id)
 
-        for key in list(self.battle_pass_progress.items):
-            if key[0] == telegram_id:
-                await self.battle_pass_progress.delete(key)
+        for battle_pass_key in list(self.battle_pass_progress.items):
+            if battle_pass_key[0] == telegram_id:
+                await self.battle_pass_progress.delete(battle_pass_key)
 
         for battle_id, battle in list(self.battles.items.items()):
             if telegram_id in {battle.player_one_id, battle.player_two_id}:

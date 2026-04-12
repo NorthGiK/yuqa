@@ -1,6 +1,6 @@
 .DEFAULT_GOAL := help
 
-.PHONY: help sync run test test-file format lint clean db-upgrade docker-build
+.PHONY: help sync run test test-file format lint clean db-upgrade docker-build agent-summary agent-check
 
 help:
 	@echo "Targets:"
@@ -12,6 +12,8 @@ help:
 	@echo "  make format     - format Python files with Ruff"
 	@echo "  make db-upgrade - apply Alembic migrations"
 	@echo "  make docker-build - build the production image"
+	@echo "  make agent-summary - print a compact JSON repository map"
+	@echo "  make agent-check - validate architecture boundaries"
 	@echo "  make clean      - remove caches"
 
 sync:
@@ -36,8 +38,11 @@ format:
 db-upgrade:
 	uv run alembic upgrade head
 
-docker-build:
-	docker build -t yuqa:latest .
+agent-summary:
+	uv run python scripts/agent_audit.py summary
+
+agent-check:
+	uv run python scripts/agent_audit.py check
 
 clean:
 	find yuqa tests -type d -name '__pycache__' -prune -exec rm -rf {} +

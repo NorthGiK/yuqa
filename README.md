@@ -8,12 +8,29 @@ container deployment support.
 ```bash
 make sync
 cp .env.example .env
+make agent-summary
 make db-upgrade
 make run
 ```
 
 By default the bot stores state in SQLite at `data/yuqa/yuqa.db`. Override it
 with `DATABASE_URL` to use PostgreSQL or another SQLAlchemy-supported database.
+
+## AI-agent workflow
+
+The repository includes an agent-focused inspection script and guide:
+
+```bash
+make agent-summary
+make agent-check
+```
+
+- `make agent-summary` prints a compact JSON map of entrypoints, features,
+  storage modes, and hotspot files.
+- `make agent-check` validates a few layer boundaries so domain modules do not
+  quietly depend on Telegram or persistence adapters.
+- `docs/ai-agents.md` provides the shortest path to the correct modules for
+  runtime, transport, domain, and persistence work.
 
 ## Persistence model
 

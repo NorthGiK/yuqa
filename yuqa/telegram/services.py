@@ -530,6 +530,50 @@ class TelegramServices:
         await self.players.save(player)
         return player
 
+    async def delete_player(self, telegram_id: int) -> Player:
+        """Delete a player and clean up related runtime state."""
+
+        player = await self.get_player(telegram_id)
+        if player is None:
+            raise EntityNotFoundError("player not found")
+
+        clan = await self.player_clan(player)
+        if clan is not None:
+            clan.remove_member(telegram_id)
+            if clan.owner_player_id == telegram_id:
+                for member_id in list(clan.members):
+                    if member_id == telegram_id:
+                        continue
+                    member = await self.players.get_by_id(member_id)
+                    if member is not None:
+                        member.clan_id = None
+                        await self.players.save(member)
+                await self.clans.delete(clan.id)
+            else:
+                await self.clans.save(clan)
+
+        for card_id, card in list(self.player_cards.items.items()):
+            if card.owner_player_id == telegram_id:
+                await self.player_cards.delete(card_id)
+
+        for key in list(self.battle_pass_progress.items):
+            if key[0] == telegram_id:
+                await self.battle_pass_progress.delete(key)
+
+        for battle_id, battle in list(self.battles.items.items()):
+            if telegram_id in {battle.player_one_id, battle.player_two_id}:
+                await self.battles.delete(battle_id)
+
+        self.search_queue.pop(telegram_id, None)
+        self.deck_drafts.pop(telegram_id, None)
+        self.action_events[:] = [
+            event for event in self.action_events if event[0] != telegram_id
+        ]
+
+        await self.players.delete(telegram_id)
+        self._persist_runtime_state()
+        return player
+
     async def propose_idea(
         self, telegram_id: int, title: str, description: str
     ) -> Idea:

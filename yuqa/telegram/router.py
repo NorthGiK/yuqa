@@ -59,6 +59,7 @@ from yuqa.telegram.states import (
     ShopCreate,
     ShopDelete,
     StandardCardsEdit,
+    PlayerDelete,
     UniverseCreate,
     UniverseDelete,
 )
@@ -420,6 +421,7 @@ async def show_card_detail(
                 page=page,
                 scope="gallery",
             ),
+            content_type=template.image.content_type,
         )
     card = await services.get_card(card_id, player_id)
     template = await services.get_template(card.template_id)
@@ -437,6 +439,7 @@ async def show_card_detail(
             page=page,
             scope="collection",
         ),
+        content_type=template.image.content_type,
     )
 
 
@@ -921,7 +924,7 @@ async def capture_battle_pass_season_end_at(
     if end_at is None:
         return await message.answer("Введи дату финиша в ISO-формате 🙂")
     try:
-        season = await services.create_battle_pass_season(
+        await services.create_battle_pass_season(
             data["name"], data["start_at"], end_at
         )
     except (DomainError, ValidationError, KeyError, ValueError) as error:
@@ -1101,6 +1104,17 @@ async def start_admin_player_edit(message: Message, state: FSMContext, mode: str
     )
 
 
+async def start_admin_player_delete(message: Message, state: FSMContext):
+    """Open the admin flow for deleting a player."""
+
+    await state.clear()
+    await state.set_state(PlayerDelete.player_id)
+    return await message.answer(
+        "🗑 <b>Удаление игрока</b>\nВведи ID игрока, которого нужно удалить.",
+        reply_markup=admin_wizard_markup("players"),
+    )
+
+
 async def capture_admin_player_id(message: Message, state: FSMContext):
     """Store the target player id and ask for the value."""
 
@@ -1117,6 +1131,20 @@ async def capture_admin_player_id(message: Message, state: FSMContext):
         "Введи титул для игрока.",
         reply_markup=admin_wizard_markup("players"),
     )
+
+
+async def capture_admin_player_delete(message: Message, services, state: FSMContext):
+    """Delete the selected player."""
+
+    player_id = _parse_int(message.text or "0", "player id", positive=True)
+    try:
+        player = await services.delete_player(player_id)
+    except (DomainError, ValidationError) as error:
+        await state.clear()
+        return await message.answer(f"❌ {error}")
+    await state.clear()
+    await message.answer(f"✅ Игрок <code>{player.telegram_id}</code> удалён.")
+    await show_admin(message, services, "players")
 
 
 async def capture_admin_player_value(message: Message, services, state: FSMContext):
@@ -2165,6 +2193,8 @@ def build_router(services, settings) -> Router:
             )
         if action == "players_title":
             return await start_admin_player_edit(callback.message, state, "title")
+        if action == "delete_player":
+            return await start_admin_player_delete(callback.message, state)
         if action == "delete_card":
             await state.clear()
             await state.set_state(CardDelete.item_id)
@@ -2442,6 +2472,10 @@ def build_router(services, settings) -> Router:
     @router.message(AdminPlayerEdit.value)
     async def _admin_player_value(message: Message, state: FSMContext):
         await capture_admin_player_value(message, services, state)
+
+    @router.message(PlayerDelete.player_id)
+    async def _admin_player_delete(message: Message, state: FSMContext):
+        await capture_admin_player_delete(message, services, state)
 
     @router.message(BattlePassLevelCreate.level_number)
     async def _battle_pass_level_number(message: Message, state: FSMContext):

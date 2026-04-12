@@ -359,8 +359,8 @@ async def test_admin_can_create_and_delete_battle_pass_season(tmp_path) -> None:
 
     future = await services.create_battle_pass_season(
         "Сезон 2",
-        now + timedelta(days=10),
-        now + timedelta(days=20),
+        now + timedelta(days=40),
+        now + timedelta(days=50),
     )
     assert future.name == "Сезон 2"
 

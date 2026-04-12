@@ -133,6 +133,12 @@ class AdminPlayerEdit(StatesGroup):
     value = State()
 
 
+class PlayerDelete(StatesGroup):
+    """Collect a player id for admin deletion."""
+
+    player_id = State()
+
+
 class ProfileBackgroundCreate(StatesGroup):
     """Create a profile background step by step."""
 

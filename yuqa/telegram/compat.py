@@ -238,6 +238,7 @@ class Message:
         "reply_markup",
         "answered_text",
         "answered_photo",
+        "answered_document",
         "answered_video",
         "caption",
         "photo",
@@ -263,6 +264,7 @@ class Message:
         self.document = document
         self.answered_text = None
         self.answered_photo = None
+        self.answered_document = None
         self.answered_video = None
         self.caption = None
 
@@ -275,6 +277,15 @@ class Message:
     async def answer_photo(self, photo, caption=None, reply_markup=None, **_: object):
         self.photo = photo
         self.answered_photo = photo
+        self.caption = caption
+        self.reply_markup = reply_markup
+        return self
+
+    async def answer_document(
+        self, document, caption=None, reply_markup=None, **_: object
+    ):
+        self.document = document
+        self.answered_document = document
         self.caption = caption
         self.reply_markup = reply_markup
         return self

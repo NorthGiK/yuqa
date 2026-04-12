@@ -18,10 +18,17 @@ from yuqa.shared.enums import (
 from yuqa.shared.value_objects.image_ref import ImageRef
 from yuqa.shared.value_objects.resource_wallet import ResourceWallet
 from yuqa.shared.value_objects.stat_block import StatBlock
-from yuqa.telegram.compat import CallbackQuery, FSMContext, Message, User
+from yuqa.telegram.compat import (
+    CallbackQuery,
+    FSMContext,
+    Message,
+    TelegramBadRequest,
+    User,
+)
 from yuqa.telegram.reply import safe_edit, send_card_preview
 from yuqa.telegram.router import (
     show_admin,
+    show_card_detail,
     show_gallery,
     show_idea_collection,
     show_idea_detail,
@@ -85,6 +92,7 @@ async def test_home_and_menu_are_localized() -> None:
     assert "🎁 Бесплатно" in buttons
     assert "🛠 Админка" not in buttons
     assert "🛠 Админка" in _button_texts(main_menu_markup(is_admin=True))
+    assert "🗑 Удалить игрока" in _button_texts(admin_markup("players"))
 
 
 @pytest.mark.asyncio
@@ -239,6 +247,65 @@ async def test_card_gallery_and_collection_paginate_after_ten_items() -> None:
     assert "Карта 11" in gallery_callback.message.text
     assert "➡️" not in _button_texts(gallery_callback.message.reply_markup)
     assert "⬅️" in _button_texts(gallery_callback.message.reply_markup)
+
+
+@pytest.mark.asyncio
+async def test_show_card_detail_opens_from_collection_and_gallery() -> None:
+    """Card detail callbacks should render a preview for both scopes."""
+
+    services = TelegramServices()
+    template = CardTemplate(
+        id=1,
+        name="Рейна",
+        universe=Universe.ORIGINAL,
+        rarity=Rarity.EPIC,
+        image=ImageRef("reina-file-id"),
+        card_class=CardClass.MELEE,
+        base_stats=StatBlock(10, 20, 5),
+        ascended_stats=StatBlock(15, 25, 8),
+        ability=Ability(cost=0, cooldown=0),
+    )
+    await services.card_templates.add(template)
+    await services.player_cards.add(PlayerCard(id=7, owner_player_id=1, template_id=1))
+
+    collection_callback = CallbackQuery(from_user=User(1), message=Message(text="old"))
+    gallery_callback = CallbackQuery(from_user=User(1), message=Message(text="old"))
+
+    await show_card_detail(collection_callback, services, 7, 1, page=1, scope="collection")
+    await show_card_detail(gallery_callback, services, 1, 1, page=1, scope="gallery")
+
+    assert collection_callback.message.answered_photo == "reina-file-id"
+    assert "Карта" in (collection_callback.message.caption or "")
+    assert gallery_callback.message.answered_photo == "reina-file-id"
+    assert "Рейна" in (gallery_callback.message.caption or "")
+
+
+@pytest.mark.asyncio
+async def test_card_preview_falls_back_to_text_when_photo_send_fails() -> None:
+    """Card detail screens should fall back to a document before text."""
+
+    from aiogram.methods import SendPhoto
+
+    callback = CallbackQuery(from_user=User(1), message=Message(text="old"))
+    with patch.object(
+        Message,
+        "answer_photo",
+        new=AsyncMock(
+            side_effect=TelegramBadRequest(
+                SendPhoto(chat_id=1, photo="broken-photo"),
+                "bad photo",
+            )
+        ),
+    ):
+        await send_card_preview(
+            callback,
+            "broken-photo",
+            "🎴 <b>Рейна</b>",
+            content_type="image/png",
+        )
+
+    assert callback.message.answered_document == "broken-photo"
+    assert callback.message.caption == "🎴 <b>Рейна</b>"
 
 
 @pytest.mark.asyncio

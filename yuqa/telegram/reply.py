@@ -70,22 +70,59 @@ async def send_or_edit(
 
 
 async def send_card_preview(
-    event, photo: str, caption: str, reply_markup: InlineKeyboardMarkup | None = None
+    event,
+    photo: str,
+    caption: str,
+    reply_markup: InlineKeyboardMarkup | None = None,
+    *,
+    content_type: str = "image/png",
 ):
     """Send a card preview with an image when possible."""
 
-    if getattr(event, "message", None) is not None and hasattr(
-        event.message, "answer_photo"
-    ):
+    if getattr(event, "message", None) is not None and hasattr(event.message, "answer_photo"):
         if hasattr(event, "answer"):
             await event.answer()
-        return await event.message.answer_photo(
-            photo=photo, caption=caption, reply_markup=reply_markup
-        )
+        if content_type.startswith("video/") and hasattr(event.message, "answer_video"):
+            try:
+                return await event.message.answer_video(
+                    video=photo, caption=caption, reply_markup=reply_markup
+                )
+            except TelegramBadRequest:
+                pass
+        try:
+            return await event.message.answer_photo(
+                photo=photo, caption=caption, reply_markup=reply_markup
+            )
+        except TelegramBadRequest:
+            if hasattr(event.message, "answer_document"):
+                try:
+                    return await event.message.answer_document(
+                        document=photo, caption=caption, reply_markup=reply_markup
+                    )
+                except TelegramBadRequest:
+                    return await send_or_edit(event, caption, reply_markup)
+            return await send_or_edit(event, caption, reply_markup)
     if hasattr(event, "answer_photo"):
-        return await event.answer_photo(
-            photo=photo, caption=caption, reply_markup=reply_markup
-        )
+        if content_type.startswith("video/") and hasattr(event, "answer_video"):
+            try:
+                return await event.answer_video(
+                    video=photo, caption=caption, reply_markup=reply_markup
+                )
+            except TelegramBadRequest:
+                pass
+        try:
+            return await event.answer_photo(
+                photo=photo, caption=caption, reply_markup=reply_markup
+            )
+        except TelegramBadRequest:
+            if hasattr(event, "answer_document"):
+                try:
+                    return await event.answer_document(
+                        document=photo, caption=caption, reply_markup=reply_markup
+                    )
+                except TelegramBadRequest:
+                    return await send_or_edit(event, caption, reply_markup)
+            return await send_or_edit(event, caption, reply_markup)
     return await send_or_edit(event, caption, reply_markup)
 
 
@@ -103,15 +140,21 @@ async def send_media_preview(
     if getattr(event, "message", None) is not None and hasattr(event, "answer"):
         await event.answer()
     if content_type.startswith("video/") and hasattr(sender, "answer_video"):
-        return await sender.answer_video(
-            video=media_key,
-            caption=caption,
-            reply_markup=reply_markup,
-        )
+        try:
+            return await sender.answer_video(
+                video=media_key,
+                caption=caption,
+                reply_markup=reply_markup,
+            )
+        except TelegramBadRequest:
+            return await send_or_edit(event, caption, reply_markup)
     if hasattr(sender, "answer_photo"):
-        return await sender.answer_photo(
-            photo=media_key,
-            caption=caption,
-            reply_markup=reply_markup,
-        )
+        try:
+            return await sender.answer_photo(
+                photo=media_key,
+                caption=caption,
+                reply_markup=reply_markup,
+            )
+        except TelegramBadRequest:
+            return await send_or_edit(event, caption, reply_markup)
     return await send_or_edit(event, caption, reply_markup)

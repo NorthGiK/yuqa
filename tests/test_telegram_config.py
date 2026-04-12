@@ -14,6 +14,7 @@ def test_settings_from_env_reads_values(monkeypatch: pytest.MonkeyPatch, tmp_pat
     monkeypatch.setenv("ADMIN_IDS", "1, 2,3")
     monkeypatch.setenv("YUQA_DATA_DIR", str(tmp_path))
     monkeypatch.setenv("YUQA_AUTO_MIGRATE", "false")
+    monkeypatch.delenv("DATABASE_URL", raising=False)
 
     settings = Settings.from_env()
 
@@ -29,6 +30,7 @@ def test_settings_from_env_requires_token(monkeypatch: pytest.MonkeyPatch) -> No
 
     monkeypatch.delenv("BOT_TOKEN", raising=False)
     monkeypatch.setenv("ADMIN_IDS", "")
+    monkeypatch.delenv("DATABASE_URL", raising=False)
 
     with pytest.raises(ValueError, match="BOT_TOKEN is required"):
         Settings.from_env()
@@ -39,6 +41,7 @@ def test_settings_from_env_validates_admin_ids(monkeypatch: pytest.MonkeyPatch) 
 
     monkeypatch.setenv("BOT_TOKEN", "token-123")
     monkeypatch.setenv("ADMIN_IDS", "1,nope")
+    monkeypatch.delenv("DATABASE_URL", raising=False)
 
     with pytest.raises(ValueError, match="ADMIN_IDS"):
         Settings.from_env()

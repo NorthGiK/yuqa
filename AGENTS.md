@@ -10,9 +10,14 @@
 - `make run`: start the Telegram bot with `uv run yuqa`.
 - `make test`: run the full test suite with `uv run pytest -q`.
 - `make test-file FILE=tests/test_shop.py`: run one test file.
+- `make agent-summary`: print a compact JSON map of entrypoints, layers, features, and hotspots.
+- `make agent-check`: validate that domain packages do not import Telegram or infrastructure code.
 - `make lint`: run Ruff checks.
 - `make format`: format Python files with Ruff.
 - `make clean`: remove Python cache directories.
+
+## AI-Agent Shortcuts
+Start with `make agent-summary`, then read `docs/ai-agents.md` only if you need more context. For runtime bugs, follow `main.py` -> `yuqa/main.py` -> `yuqa/telegram/services.py` -> `yuqa/telegram/router.py`. For feature work, prefer `yuqa/<feature>/domain/` over adding logic directly to the Telegram router.
 
 ## Coding Style & Naming Conventions
 Use Python 3.14, 4-space indentation, and type hints on public APIs. Follow the existing style: `@dataclass(slots=True)` for entities/value objects, `snake_case` for modules/functions/variables, `PascalCase` for classes, and `UPPER_SNAKE_CASE` for constants.

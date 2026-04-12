@@ -593,10 +593,11 @@ def admin_markup(section: str = "dashboard") -> InlineKeyboardMarkup:
             [
                 ("🪄 Creator Points", AdminCallback(action="players_creator_points")),
                 ("✨ Титул", AdminCallback(action="players_title")),
+                ("🗑 Удалить игрока", AdminCallback(action="delete_player")),
                 ("🏠 Панель", AdminCallback(action="section", value="dashboard")),
                 ("⬅️ Назад", MenuCallback(section="home")),
             ],
-            (2, 2),
+            (2, 2, 1),
         )
     if section == "banners":
         return _markup(

@@ -5,6 +5,7 @@ from datetime import datetime, timedelta, timezone
 import pytest
 
 from yuqa.cards.domain.entities import Ability, AbilityEffect, CardTemplate, PlayerCard
+from yuqa.battle_pass.domain.entities import BattlePassProgress
 from yuqa.shared.enums import ProfileBackgroundRarity
 from yuqa.shared.enums import (
     AbilityStat,
@@ -18,7 +19,7 @@ from yuqa.shared.enums import (
     ResourceType,
     Universe,
 )
-from yuqa.shared.errors import ForbiddenActionError, ValidationError
+from yuqa.shared.errors import EntityNotFoundError, ForbiddenActionError, ValidationError
 from yuqa.shared.value_objects.date_range import DateRange
 from yuqa.shared.value_objects.deck_slots import DeckSlots
 from yuqa.shared.value_objects.image_ref import ImageRef
@@ -35,9 +36,11 @@ from yuqa.telegram.router import (
     capture_clan_icon,
     capture_universe_add,
     capture_universe_remove,
+    capture_admin_player_delete,
     start_battle,
     start_battle_pass_level_create,
     start_admin_player_edit,
+    start_admin_player_delete,
     start_clan_creation,
     start_universe_create,
     start_universe_delete,
@@ -90,6 +93,73 @@ async def test_player_and_clan_flows() -> None:
 
     await services.leave_clan(2)
     assert member.clan_id is None
+
+
+@pytest.mark.asyncio
+async def test_admin_player_delete_flow_removes_related_state() -> None:
+    """Deleting a player from the admin panel should clear their runtime state."""
+
+    services = TelegramServices()
+    state = FSMContext()
+    admin = User(1)
+
+    owner = await services.get_or_create_player(1)
+    owner.rating = 1200
+    owner.wallet.coins = 10_000
+    clan = await services.create_clan(1, "Shinobi", "🐺")
+    member = await services.get_or_create_player(2)
+    member.rating = 1200
+    await services.join_clan(2, clan.id)
+    await services.player_cards.add(
+        PlayerCard(
+            id=1,
+            owner_player_id=1,
+            template_id=1,
+            level=1,
+            copies_owned=1,
+            current_form=CardForm.BASE,
+        )
+    )
+    services.search_queue[1] = owner.rating
+    services.deck_drafts[1] = [1, 2, 3]
+    services.action_events.append((1, "opened-admin"))
+    services.battle_pass_progress.items[(1, 1)] = BattlePassProgress(
+        player_id=1, season_id=1
+    )
+
+    await start_admin_player_delete(Message(from_user=admin, text="/admin"), state)
+    assert state.state is not None
+
+    await capture_admin_player_delete(Message(from_user=admin, text="1"), services, state)
+
+    assert state.state is None
+    assert await services.get_player(1) is None
+    assert await services.get_player(2) is not None
+    assert services.players.items[2].clan_id is None
+    assert services.clans.items == {}
+    assert services.player_cards.items == {}
+    assert services.search_queue == {}
+    assert services.deck_drafts == {}
+    assert services.action_events == []
+    assert services.battle_pass_progress.items == {}
+
+
+@pytest.mark.asyncio
+async def test_admin_player_delete_rejects_missing_player() -> None:
+    """Deleting a missing player should surface a validation error."""
+
+    services = TelegramServices()
+    state = FSMContext()
+    admin = User(1)
+
+    with pytest.raises(EntityNotFoundError):
+        await services.delete_player(99)
+
+    await start_admin_player_delete(Message(from_user=admin, text="/admin"), state)
+    await capture_admin_player_delete(Message(from_user=admin, text="99"), services, state)
+
+    assert state.state is None
+    assert await services.get_player(99) is None
 
 
 @pytest.mark.asyncio

@@ -1,7 +1,5 @@
 """Tests for the agent-facing repository audit script."""
 
-from __future__ import annotations
-
 from scripts.agent_audit import build_summary, check_boundaries
 
 

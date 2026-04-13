@@ -21,10 +21,13 @@ try:
         CallbackQuery as _AiogramCallbackQuery,
         InlineKeyboardButton,
         InlineKeyboardMarkup,
+        KeyboardButton,
+        ReplyKeyboardMarkup,
         Message as _AiogramMessage,
         User as _AiogramUser,
     )
     from aiogram.utils.keyboard import InlineKeyboardBuilder as _InlineKeyboardBuilder
+    from aiogram.utils.keyboard import ReplyKeyboardBuilder as _ReplyKeyboardBuilder
 except Exception:  # pragma: no cover - used when aiogram is unavailable
     _BaseMiddleware = None
     _Bot = None
@@ -41,8 +44,11 @@ except Exception:  # pragma: no cover - used when aiogram is unavailable
     _StatesGroup = None
     _MemoryStorage = None
     _InlineKeyboardBuilder = None
+    _ReplyKeyboardBuilder = None
     InlineKeyboardButton = None
     InlineKeyboardMarkup = None
+    KeyboardButton = None
+    ReplyKeyboardMarkup = None
     _AiogramMessage = None
     _AiogramCallbackQuery = None
     _AiogramUser = None
@@ -138,6 +144,18 @@ if _Router is None:
     class InlineKeyboardMarkup:
         inline_keyboard: list[list[tuple[str, str]]]
 
+    @dataclass(slots=True)
+    class KeyboardButton:
+        """Tiny reply keyboard button stand-in."""
+
+        text: str
+
+    @dataclass(slots=True)
+    class ReplyKeyboardMarkup:
+        """Tiny reply keyboard stand-in."""
+
+        keyboard: list[list[KeyboardButton]]
+
     class InlineKeyboardBuilder:
         """Tiny keyboard builder used in tests."""
 
@@ -165,6 +183,32 @@ if _Router is None:
             if index < len(self._buttons):
                 rows.append(self._buttons[index:])
             return InlineKeyboardMarkup(rows)
+
+    class ReplyKeyboardBuilder:
+        """Tiny reply-keyboard builder used in tests."""
+
+        def __init__(self) -> None:
+            self._buttons = []
+            self._sizes = []
+
+        def button(self, text):
+            self._buttons.append(KeyboardButton(text=text))
+
+        def adjust(self, *sizes):
+            self._sizes = list(sizes)
+
+        def as_markup(self):
+            if not self._buttons:
+                return ReplyKeyboardMarkup([])
+            sizes = self._sizes or [len(self._buttons)]
+            rows = []
+            index = 0
+            for size in sizes:
+                rows.append(self._buttons[index : index + size])
+                index += size
+            if index < len(self._buttons):
+                rows.append(self._buttons[index:])
+            return ReplyKeyboardMarkup(rows)
 
     class CallbackData:
         """Compact callback data wrapper."""
@@ -213,6 +257,7 @@ else:
     StatesGroup = _StatesGroup
     MemoryStorage = _MemoryStorage
     InlineKeyboardBuilder = _InlineKeyboardBuilder
+    ReplyKeyboardBuilder = _ReplyKeyboardBuilder
     InlineKeyboardMarkup = InlineKeyboardMarkup
 
     def _button_getitem(self, index: int):
@@ -365,9 +410,12 @@ __all__ = [
     "FSMContext",
     "InlineKeyboardBuilder",
     "InlineKeyboardMarkup",
+    "KeyboardButton",
     "MemoryStorage",
     "Message",
     "ParseMode",
+    "ReplyKeyboardBuilder",
+    "ReplyKeyboardMarkup",
     "Router",
     "State",
     "StatesGroup",

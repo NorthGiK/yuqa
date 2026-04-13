@@ -63,7 +63,10 @@ def _button_texts(markup) -> set[str]:
     """Collect button captions from a markup in a test-friendly way."""
 
     texts = set()
-    for row in markup.inline_keyboard:
+    keyboard = getattr(markup, "inline_keyboard", None)
+    if keyboard is None:
+        keyboard = getattr(markup, "keyboard", [])
+    for row in keyboard:
         for button in row:
             if hasattr(button, "text"):
                 texts.add(button.text)
@@ -90,6 +93,9 @@ async def test_home_and_menu_are_localized() -> None:
     assert "⚔️ Бой" in buttons
     assert "🏁 Battle Pass" in buttons
     assert "🎁 Бесплатно" in buttons
+    assert "🖼 Фоны профиля" in buttons
+    assert "📚 Моя коллекция" in buttons
+    assert "🧱 Конструктор колоды" in buttons
     assert "🛠 Админка" not in buttons
     assert "🛠 Админка" in _button_texts(main_menu_markup(is_admin=True))
     assert "🗑 Удалить игрока" in _button_texts(admin_markup("players"))
@@ -162,7 +168,7 @@ async def test_card_collection_and_buttons_are_readable() -> None:
     assert "Коллекция" in text
     assert "Рейна" in text
     assert "🎴 Карта #7" in _button_texts(markup)
-    assert "⬅️ В меню" in _button_texts(battle_markup())
+    assert "⬅️ В меню" not in _button_texts(battle_markup())
     assert "Пока пусто" in cards_text([], {})
 
 
@@ -340,7 +346,7 @@ async def test_battle_markup_switches_between_search_and_cancel() -> None:
 
     assert "🔍 Поиск соперника" in _button_texts(battle_markup(False))
     assert "⏳ Отменить поиск" in _button_texts(battle_markup(True))
-    assert "🧱 Конструктор колоды" in _button_texts(battle_markup(False))
+    assert "🧱 Конструктор колоды" not in _button_texts(battle_markup(False))
 
 
 def test_admin_banner_markup_has_delete_button_only_when_editable() -> None:

@@ -1,4 +1,3 @@
-from __future__ import annotations
 from typing import Protocol
 from yuqa.battle_pass.domain.entities import BattlePassSeason, BattlePassProgress
 

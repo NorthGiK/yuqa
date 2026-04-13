@@ -1,4 +1,4 @@
-"""Inline keyboard builders for the Telegram UI."""
+"""Keyboard builders for the Telegram UI."""
 
 from yuqa.cards.domain.entities import PlayerCard
 from yuqa.ideas.domain.entities import Idea
@@ -18,18 +18,48 @@ from yuqa.telegram.callbacks import (
     ShopCallback,
     TopCallback,
 )
-from yuqa.telegram.compat import InlineKeyboardBuilder, InlineKeyboardMarkup
+from yuqa.telegram.compat import (
+    InlineKeyboardBuilder,
+    InlineKeyboardMarkup,
+    ReplyKeyboardBuilder,
+    ReplyKeyboardMarkup,
+)
 
 _CARD_PAGE_SIZE = 10
+MAIN_MENU_BUTTON_ROWS: tuple[tuple[str, ...], ...] = (
+    ("👤 Профиль", "🎴 Коллекция"),
+    ("🖼 Фоны профиля", "📖 Галерея"),
+    ("💡 Идеи", "📚 Моя коллекция"),
+    ("🏆 Топы", "⚔️ Бой"),
+    ("🧱 Конструктор колоды", "🏁 Battle Pass"),
+    ("🏰 Клан", "🛒 Магазин"),
+    ("🎁 Бесплатно", "🎁 Баннеры"),
+)
+MAIN_MENU_BUTTON_TEXTS = {
+    text for row in MAIN_MENU_BUTTON_ROWS for text in row
+} | {"🛠 Админка"}
 
 
 def _markup(buttons, sizes):
     """Build a markup from a list of button specs."""
 
     builder = InlineKeyboardBuilder()
+    if not buttons:
+        return builder.as_markup()
     for text, payload in buttons:
         builder.button(text=text, callback_data=payload)
     builder.adjust(*sizes)
+    return builder.as_markup()
+
+
+def _reply_markup(rows: tuple[tuple[str, ...], ...]) -> ReplyKeyboardMarkup:
+    """Build a reply keyboard from button rows."""
+
+    builder = ReplyKeyboardBuilder()
+    for row in rows:
+        for text in row:
+            builder.button(text=text)
+    builder.adjust(*(len(row) for row in rows))
     return builder.as_markup()
 
 
@@ -45,28 +75,13 @@ def _choice_markup(
     return _markup(buttons, (2, 2, 2))
 
 
-def main_menu_markup(*, is_admin: bool = False) -> InlineKeyboardMarkup:
+def main_menu_markup(*, is_admin: bool = False) -> ReplyKeyboardMarkup:
     """Return the main navigation keyboard."""
 
-    buttons = [
-        ("👤 Профиль", MenuCallback(section="profile")),
-        ("🎴 Коллекция", MenuCallback(section="cards")),
-        ("📖 Галерея", MenuCallback(section="gallery")),
-        ("💡 Идеи", MenuCallback(section="ideas")),
-        ("🏆 Топы", MenuCallback(section="tops")),
-        ("⚔️ Бой", MenuCallback(section="battle")),
-        ("🏁 Battle Pass", MenuCallback(section="battle_pass")),
-        ("🏰 Клан", MenuCallback(section="clan")),
-        ("🛒 Магазин", MenuCallback(section="shop")),
-        ("🎁 Бесплатно", MenuCallback(section="free_rewards")),
-        ("🎁 Баннеры", MenuCallback(section="banners")),
-    ]
+    rows = list(MAIN_MENU_BUTTON_ROWS)
     if is_admin:
-        buttons.append(("🛠 Админка", MenuCallback(section="admin")))
-    return _markup(
-        buttons,
-        (2, 2, 2, 2, 2, 2) if is_admin else (2, 2, 2, 2, 2, 1),
-    )
+        rows.append(("🛠 Админка",))
+    return _reply_markup(tuple(rows))
 
 
 def battle_markup(searching: bool = False) -> InlineKeyboardMarkup:
@@ -74,14 +89,7 @@ def battle_markup(searching: bool = False) -> InlineKeyboardMarkup:
 
     button = "⏳ Отменить поиск" if searching else "🔍 Поиск соперника"
     action = "cancel_search" if searching else "search"
-    return _markup(
-        [
-            (button, BattleQueueCallback(action=action)),
-            ("🧱 Конструктор колоды", MenuCallback(section="deck")),
-            ("⬅️ В меню", MenuCallback(section="home")),
-        ],
-        (1, 1, 1),
-    )
+    return _markup([(button, BattleQueueCallback(action=action))], (1,))
 
 
 def cards_markup(
@@ -104,11 +112,9 @@ def cards_markup(
         buttons.append(("⬅️", CardCallback(action="page", page=page - 1, scope="collection")))
     if has_next:
         buttons.append(("➡️", CardCallback(action="page", page=page + 1, scope="collection")))
-    buttons.append(("⬅️ В меню", MenuCallback(section="home")))
     sizes = [1] * len(cards)
     if has_prev or has_next:
         sizes.append(2 if has_prev and has_next else 1)
-    sizes.append(1)
     return _markup(buttons, tuple(sizes))
 
 
@@ -137,11 +143,9 @@ def gallery_markup(
         buttons.append(("⬅️", CardCallback(action="page", page=page - 1, scope="gallery")))
     if has_next:
         buttons.append(("➡️", CardCallback(action="page", page=page + 1, scope="gallery")))
-    buttons.append(("⬅️ В меню", MenuCallback(section="home")))
     sizes = [1] * len(templates)
     if has_prev or has_next:
         sizes.append(2 if has_prev and has_next else 1)
-    sizes.append(1)
     return _markup(buttons, tuple(sizes))
 
 
@@ -203,16 +207,14 @@ def clan_markup(has_clan: bool) -> InlineKeyboardMarkup:
                 "🚪 Покинуть клан" if has_clan else "➕ Создать клан",
                 ClanCallback(action="leave" if has_clan else "create"),
             ),
-            ("⬅️ В меню", MenuCallback(section="home")),
         ],
-        (1, 1),
+        (1,),
     )
 
 
 def profile_markup(
     *,
     is_owner: bool,
-    has_backgrounds: bool,
     has_nickname: bool,
 ) -> InlineKeyboardMarkup:
     """Return the profile screen keyboard."""
@@ -224,12 +226,7 @@ def profile_markup(
             buttons.append(
                 ("🧹 Сбросить ник", ProfileCallback(action="clear_nickname"))
             )
-        if has_backgrounds:
-            buttons.append(
-                ("🖼 Фоны профиля", MenuCallback(section="profile_backgrounds"))
-            )
-    buttons.append(("⬅️ В меню", MenuCallback(section="home")))
-    return _markup(buttons, (2, 2, 1, 1))
+    return _markup(buttons, (2, 2, 1))
 
 
 def shop_markup(item_ids: list[int]) -> InlineKeyboardMarkup:
@@ -239,8 +236,7 @@ def shop_markup(item_ids: list[int]) -> InlineKeyboardMarkup:
         (f"🛒 Купить #{item_id}", ShopCallback(action="buy", item_id=item_id))
         for item_id in item_ids
     ]
-    buttons.append(("⬅️ В меню", MenuCallback(section="home")))
-    return _markup(buttons, (2, 2, 1))
+    return _markup(buttons, (2, 2))
 
 
 def banner_markup(banner_id: int) -> InlineKeyboardMarkup:
@@ -256,9 +252,8 @@ def banner_markup(banner_id: int) -> InlineKeyboardMarkup:
                 "✨ Крутка x10",
                 BannerCallback(action="pull", banner_id=banner_id, count=10),
             ),
-            ("⬅️ В меню", MenuCallback(section="home")),
         ],
-        (2, 1),
+        (2,),
     )
 
 
@@ -270,7 +265,6 @@ def battle_pass_markup(*, can_buy_level: bool = False) -> InlineKeyboardMarkup:
         buttons.append(
             ("💰 Купить уровень за 250", BattlePassCallback(action="buy_level"))
         )
-    buttons.append(("⬅️ В меню", MenuCallback(section="home")))
     return _markup(buttons, (1, 1) if can_buy_level else (1,))
 
 
@@ -294,8 +288,7 @@ def tops_markup(current_mode: str) -> InlineKeyboardMarkup:
         )
         for mode in ("rating", "badenko_cards", "creator_points")
     ]
-    buttons.append(("⬅️ В меню", MenuCallback(section="home")))
-    return _markup(buttons, (1, 1, 1, 1))
+    return _markup(buttons, (1, 1, 1))
 
 
 def profile_backgrounds_markup(background_ids: list[int]) -> InlineKeyboardMarkup:
@@ -309,8 +302,7 @@ def profile_backgrounds_markup(background_ids: list[int]) -> InlineKeyboardMarku
         for background_id in background_ids
     ]
     buttons.append(("🧹 Снять фон", ProfileCallback(action="clear_background")))
-    buttons.append(("⬅️ К профилю", MenuCallback(section="profile")))
-    return _markup(buttons, (2, 2, 1, 1))
+    return _markup(buttons, (2, 2, 1))
 
 
 def profile_background_markup(
@@ -326,7 +318,6 @@ def profile_background_markup(
                 ProfileCallback(action="set_background", background_id=background_id),
             )
         )
-    buttons.append(("⬅️ К фонам", MenuCallback(section="profile_backgrounds")))
     return _markup(buttons, (1, 1))
 
 
@@ -337,9 +328,8 @@ def free_rewards_markup() -> InlineKeyboardMarkup:
         [
             ("🎴 Забрать карту", FreeRewardCallback(action="claim_card")),
             ("💰 Забрать ресурсы", FreeRewardCallback(action="claim_resources")),
-            ("⬅️ В меню", MenuCallback(section="home")),
         ],
-        (1, 1, 1),
+        (1, 1),
     )
 
 
@@ -373,17 +363,11 @@ def ideas_markup(
     buttons.extend(nav)
     if not collection:
         buttons.append(("➕ Предложить идею", IdeaCallback(action="propose", page=page)))
-        buttons.append(("📚 Моя коллекция", MenuCallback(section="idea_collection")))
-    else:
-        buttons.append(("📣 К идеям", MenuCallback(section="ideas")))
-    buttons.append(("⬅️ В меню", MenuCallback(section="home")))
     sizes = [1] * len(ideas)
     if nav:
         sizes.append(len(nav))
-    if collection:
-        sizes.extend((1, 1))
-    else:
-        sizes.extend((1, 1, 1))
+    if not collection:
+        sizes.append(1)
     return _markup(buttons, tuple(sizes))
 
 
@@ -420,8 +404,7 @@ def idea_detail_markup(
                 ),
             ]
         )
-    buttons.append(("⬅️ К списку", IdeaCallback(action="page", page=page, scope=scope)))
-    return _markup(buttons, (2, 1) if can_vote else (1,))
+    return _markup(buttons, (2,) if can_vote else ())
 
 
 def admin_ideas_markup(
@@ -553,11 +536,10 @@ def deck_builder_markup(
     controls = [
         ("💾 Сохранить", DeckCallback(action="save", card_id=0)),
         ("🧹 Очистить", DeckCallback(action="clear", card_id=0)),
-        ("⬅️ К бою", MenuCallback(section="battle")),
     ]
     buttons = card_buttons + controls
     card_rows = [2] * ((len(card_buttons) + 1) // 2)
-    return _markup(buttons, tuple(card_rows + [2, 1]))
+    return _markup(buttons, tuple(card_rows + [2]))
 
 
 def admin_markup(section: str = "dashboard") -> InlineKeyboardMarkup:

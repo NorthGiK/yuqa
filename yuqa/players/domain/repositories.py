@@ -1,4 +1,3 @@
-from __future__ import annotations
 from typing import Protocol
 from yuqa.players.domain.entities import Player, ProfileBackgroundTemplate
 

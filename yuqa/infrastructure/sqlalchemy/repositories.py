@@ -1,7 +1,5 @@
 """Persistent repositories backed by a single SQLAlchemy document store."""
 
-from __future__ import annotations
-
 from pathlib import Path
 
 from sqlalchemy import create_engine, event, select

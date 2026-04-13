@@ -4,8 +4,8 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 
-from yuqa.telegram.compat import Message, TelegramBadRequest
-from yuqa.telegram.reply import safe_edit
+from yuqa.telegram.compat import CallbackQuery, Message, TelegramBadRequest, User
+from yuqa.telegram.reply import safe_edit, send_notice
 
 
 @pytest.mark.asyncio
@@ -26,3 +26,33 @@ async def test_safe_edit_falls_back_when_message_has_no_text() -> None:
         await safe_edit(message, "Новый экран")
 
     assert message.answered_text == "Новый экран"
+
+
+@pytest.mark.asyncio
+async def test_send_notice_writes_a_chat_message_for_callbacks() -> None:
+    """Callback notices should become chat messages instead of popup alerts."""
+
+    message = Message(from_user=User(1), text="old")
+    callback = CallbackQuery(from_user=User(1), message=message)
+
+    result = await send_notice(callback, "Ошибка")
+
+    assert result is message
+    assert message.answered_text == "Ошибка"
+    assert callback.answered_text is None
+    assert callback.alert is False
+
+
+@pytest.mark.asyncio
+async def test_send_notice_does_not_answer_callback_when_message_exists() -> None:
+    """A visible callback notice should not also trigger a callback toast."""
+
+    message = Message(from_user=User(1), text="old")
+    callback = CallbackQuery(from_user=User(1), message=message)
+
+    with patch.object(
+        CallbackQuery, "answer", new=AsyncMock(return_value=None)
+    ) as callback_answer:
+        await send_notice(callback, "Ошибка")
+
+    callback_answer.assert_not_called()

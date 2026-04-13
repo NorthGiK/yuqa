@@ -41,7 +41,12 @@ from yuqa.telegram.compat import (
     Message,
     Router,
 )
-from yuqa.telegram.reply import send_card_preview, send_media_preview, send_or_edit
+from yuqa.telegram.reply import (
+    send_card_preview,
+    send_media_preview,
+    send_notice,
+    send_or_edit,
+)
 from yuqa.telegram.services import TelegramServices
 from yuqa.telegram.states import (
     BannerCreate,
@@ -125,6 +130,7 @@ from yuqa.telegram.ui import (
     idea_detail_markup,
     ideas_markup,
     main_menu_markup,
+    MAIN_MENU_BUTTON_TEXTS,
     profile_background_markup,
     profile_backgrounds_markup,
     profile_markup,
@@ -327,7 +333,13 @@ async def show_home(event, services, player_id: int, *, is_admin: bool = False):
     """Show the main menu."""
 
     player = await services.get_or_create_player(player_id)
-    await send_or_edit(event, menu_text(player), main_menu_markup(is_admin=is_admin))
+    if isinstance(event, CallbackQuery):
+        if event.message is not None:
+            await event.message.answer(
+                menu_text(player), reply_markup=main_menu_markup(is_admin=is_admin)
+            )
+        return await event.answer()
+    await event.answer(menu_text(player), reply_markup=main_menu_markup(is_admin=is_admin))
 
 
 async def show_profile(
@@ -340,21 +352,20 @@ async def show_profile(
     """Show the profile screen."""
 
     viewer_player_id = player_id if viewer_player_id is None else viewer_player_id
-    if player_id == viewer_player_id:
-        player = await services.get_or_create_player(player_id)
-    else:
+    player = await services.get_or_create_player(player_id)
+    if player_id != viewer_player_id:
         player = await services.get_player(player_id)
         if player is None:
-            return await send_or_edit(
-                event,
-                "👤 <b>Профиль</b>\n<i>Игрок с таким ID не найден.</i>",
-                main_menu_markup(),
-            )
+            text = "👤 <b>Профиль</b>\n<i>Игрок с таким ID не найден.</i>"
+            if isinstance(event, CallbackQuery):
+                if event.message is not None:
+                    await event.message.answer(text, reply_markup=main_menu_markup())
+                return await event.answer()
+            return await event.answer(text, reply_markup=main_menu_markup())
     clan = await services.player_clan(player)
     selected_background = await services.selected_profile_background_for_player(player)
     markup = profile_markup(
         is_owner=player.telegram_id == viewer_player_id,
-        has_backgrounds=bool(player.owned_profile_background_ids),
         has_nickname=player.nickname is not None,
     )
     text = profile_text(player, clan, selected_background)
@@ -574,7 +585,6 @@ async def show_banners(event, services):
         return await send_or_edit(
             event,
             "🎁 <b>Баннеры</b>\n<i>Пока активных баннеров нет.</i>",
-            main_menu_markup(),
         )
     await send_or_edit(
         event,
@@ -1774,6 +1784,45 @@ def build_router(services, settings) -> Router:
             return await show_admin(message, services)
         await message.answer("🧹 Сбросил текущий шаг.")
 
+    @router.message(lambda message: message.text in MAIN_MENU_BUTTON_TEXTS)
+    async def navigate_main_menu(message: Message, state: FSMContext):
+        if not message.from_user or message.text is None:
+            return
+        await state.clear()
+        text = message.text
+        if text == "👤 Профиль":
+            return await show_profile(message, services, message.from_user.id)
+        if text == "🎴 Коллекция":
+            return await show_cards(message, services, message.from_user.id)
+        if text == "🖼 Фоны профиля":
+            return await show_profile_backgrounds(message, services, message.from_user.id)
+        if text == "📖 Галерея":
+            return await show_gallery(message, services)
+        if text == "💡 Идеи":
+            return await show_ideas(message, services, message.from_user.id)
+        if text == "📚 Моя коллекция":
+            return await show_idea_collection(message, services, message.from_user.id)
+        if text == "🏆 Топы":
+            return await show_tops(message, services)
+        if text == "⚔️ Бой":
+            return await show_battle(message, services, message.from_user.id)
+        if text == "🧱 Конструктор колоды":
+            return await show_deck_builder(message, services, message.from_user.id)
+        if text == "🏁 Battle Pass":
+            return await show_battle_pass(message, services, message.from_user.id)
+        if text == "🏰 Клан":
+            return await show_clan(message, services, message.from_user.id)
+        if text == "🛒 Магазин":
+            return await show_shop(message, services)
+        if text == "🎁 Бесплатно":
+            return await show_free_rewards(message, services, message.from_user.id)
+        if text == "🎁 Баннеры":
+            return await show_banners(message, services)
+        if text == "🛠 Админка":
+            if message.from_user.id not in settings.admin_ids:
+                return await message.answer("⛔ Доступ закрыт.")
+            return await show_admin(message, services)
+
     @router.callback_query(MenuCallback.filter())
     async def navigate_menu(callback: CallbackQuery, callback_data: MenuCallback):
         if not callback.from_user:
@@ -1817,7 +1866,7 @@ def build_router(services, settings) -> Router:
         elif section == "admin" and callback.from_user.id in settings.admin_ids:
             await show_admin(callback, services)
         elif section == "admin":
-            return await callback.answer("⛔ Доступ закрыт.", show_alert=True)
+            return await send_notice(callback, "⛔ Доступ закрыт.")
         else:
             return await callback.answer()
 
@@ -1846,7 +1895,7 @@ def build_router(services, settings) -> Router:
             try:
                 if scope.startswith("admin_"):
                     if callback.from_user.id not in settings.admin_ids:
-                        return await callback.answer("⛔ Доступ закрыт.", show_alert=True)
+                        return await send_notice(callback, "⛔ Доступ закрыт.")
                     return await show_admin_idea_detail(
                         callback,
                         services,
@@ -1863,7 +1912,7 @@ def build_router(services, settings) -> Router:
                     scope=scope,
                 )
             except (DomainError, ValidationError) as error:
-                return await callback.answer(f"❌ {error}", show_alert=True)
+                return await send_notice(callback, f"❌ {error}")
         if action in {"vote_up", "vote_down"}:
             try:
                 await services.vote_for_idea(
@@ -1872,7 +1921,7 @@ def build_router(services, settings) -> Router:
                     1 if action == "vote_up" else -1,
                 )
             except (DomainError, ValidationError) as error:
-                return await callback.answer(f"❌ {error}", show_alert=True)
+                return await send_notice(callback, f"❌ {error}")
             return await show_idea_detail(
                 callback,
                 services,
@@ -1882,7 +1931,7 @@ def build_router(services, settings) -> Router:
                 scope=scope,
             )
         if callback.from_user.id not in settings.admin_ids:
-            return await callback.answer("⛔ Доступ закрыт.", show_alert=True)
+            return await send_notice(callback, "⛔ Доступ закрыт.")
         if action == "admin_list":
             return await show_admin(
                 callback,
@@ -1919,7 +1968,7 @@ def build_router(services, settings) -> Router:
                     scope="admin_rejected",
                 )
         except (DomainError, ValidationError) as error:
-            return await callback.answer(f"❌ {error}", show_alert=True)
+            return await send_notice(callback, f"❌ {error}")
         return await callback.answer()
 
     @router.callback_query(ProfileCallback.filter())
@@ -1944,19 +1993,17 @@ def build_router(services, settings) -> Router:
                     callback.from_user.id, callback_data.background_id
                 )
             except (DomainError, ValidationError) as error:
-                return await callback.answer(f"❌ {error}", show_alert=True)
+                return await send_notice(callback, f"❌ {error}")
             return await show_profile(callback, services, callback.from_user.id)
         if callback_data.action == "open_background":
             player = await services.get_or_create_player(callback.from_user.id)
             if callback_data.background_id not in player.owned_profile_background_ids:
-                return await callback.answer(
-                    "Фон не найден в коллекции", show_alert=True
-                )
+                return await send_notice(callback, "Фон не найден в коллекции")
             background = await services.get_profile_background(
                 callback_data.background_id
             )
             if background is None:
-                return await callback.answer("Фон не найден", show_alert=True)
+                return await send_notice(callback, "Фон не найден")
             return await send_media_preview(
                 callback,
                 background.media.storage_key,
@@ -2047,7 +2094,7 @@ def build_router(services, settings) -> Router:
                 return await callback.answer()
             template = await services.get_template(card.template_id)
         except DomainError as error:
-            return await callback.answer(f"❌ {error}", show_alert=True)
+            return await send_notice(callback, f"❌ {error}")
         await send_or_edit(
             callback,
             card_text(card, template),
@@ -2070,7 +2117,7 @@ def build_router(services, settings) -> Router:
                 callback.from_user.id, callback_data.item_id
             )
         except DomainError as error:
-            return await callback.answer(f"❌ {error}", show_alert=True)
+            return await send_notice(callback, f"❌ {error}")
         await show_shop(callback, services)
 
     @router.callback_query(BannerCallback.filter())
@@ -2085,7 +2132,7 @@ def build_router(services, settings) -> Router:
             if banner is None:
                 raise DomainError("banner not found")
         except DomainError as error:
-            return await callback.answer(f"❌ {error}", show_alert=True)
+            return await send_notice(callback, f"❌ {error}")
         await send_or_edit(
             callback,
             banner_text(banner)
@@ -2102,14 +2149,14 @@ def build_router(services, settings) -> Router:
             return await callback.answer()
         if callback_data.action == "create":
             await state.set_state(ClanCreation.name)
-            return await callback.answer(
-                "Напиши /clan_create, чтобы начать 🌟", show_alert=True
+            return await send_notice(
+                callback, "Напиши /clan_create, чтобы начать 🌟"
             )
         if callback_data.action == "leave":
             try:
                 await services.leave_clan(callback.from_user.id)
             except DomainError as error:
-                return await callback.answer(f"❌ {error}", show_alert=True)
+                return await send_notice(callback, f"❌ {error}")
             return await show_clan(callback, services, callback.from_user.id)
         return await callback.answer()
 
@@ -2141,10 +2188,10 @@ def build_router(services, settings) -> Router:
                 callback.from_user.id
             )
         except (DomainError, ValidationError, EntityNotFoundError) as error:
-            return await callback.answer(f"❌ {error}", show_alert=True)
-        return await callback.answer(
+            return await send_notice(callback, f"❌ {error}")
+        return await send_notice(
+            callback,
             f"✅ Куплен уровень {level_number}. У тебя {progress.points} очков.",
-            show_alert=True,
         )
 
     @router.callback_query(DeckCallback.filter())
@@ -2163,7 +2210,7 @@ def build_router(services, settings) -> Router:
             else:
                 return await callback.answer()
         except (DomainError, ValidationError) as error:
-            return await callback.answer(f"❌ {error}", show_alert=True)
+            return await send_notice(callback, f"❌ {error}")
         await show_deck_builder(callback, services, callback.from_user.id)
 
     @router.callback_query(FreeRewardCallback.filter())
@@ -2184,7 +2231,7 @@ def build_router(services, settings) -> Router:
             else:
                 return await callback.answer()
         except (DomainError, ValidationError) as error:
-            return await callback.answer(f"❌ {error}", show_alert=True)
+            return await send_notice(callback, f"❌ {error}")
         await show_free_rewards(callback, services, callback.from_user.id, notice)
 
     @router.callback_query(AdminCallback.filter())
@@ -2192,7 +2239,7 @@ def build_router(services, settings) -> Router:
         callback: CallbackQuery, callback_data: AdminCallback, state: FSMContext
     ):
         if not callback.from_user or callback.from_user.id not in settings.admin_ids:
-            return await callback.answer("⛔ Доступ закрыт.", show_alert=True)
+            return await send_notice(callback, "⛔ Доступ закрыт.")
         action = callback_data.action
         if action == "section":
             return await show_admin(callback, services, callback_data.value)
@@ -2248,9 +2295,9 @@ def build_router(services, settings) -> Router:
         if action == "banner_add_card":
             banner = await services.banners.get_by_id(callback_data.banner_id)
             if banner is None:
-                return await callback.answer("Баннер не найден", show_alert=True)
+                return await send_notice(callback, "Баннер не найден")
             if not banner.can_edit():
-                return await callback.answer("Баннер уже запущен", show_alert=True)
+                return await send_notice(callback, "Баннер уже запущен")
             await state.clear()
             await state.set_state(BannerRewardCreate.template_id)
             await state.update_data(
@@ -2265,9 +2312,9 @@ def build_router(services, settings) -> Router:
         if action == "banner_remove_card":
             banner = await services.banners.get_by_id(callback_data.banner_id)
             if banner is None:
-                return await callback.answer("Баннер не найден", show_alert=True)
+                return await send_notice(callback, "Баннер не найден")
             if not banner.can_edit():
-                return await callback.answer("Баннер уже запущен", show_alert=True)
+                return await send_notice(callback, "Баннер уже запущен")
             await state.clear()
             await state.set_state(BannerRewardCreate.template_id)
             await state.update_data(
@@ -2282,9 +2329,9 @@ def build_router(services, settings) -> Router:
         if action == "banner_add_background":
             banner = await services.banners.get_by_id(callback_data.banner_id)
             if banner is None:
-                return await callback.answer("Баннер не найден", show_alert=True)
+                return await send_notice(callback, "Баннер не найден")
             if not banner.can_edit():
-                return await callback.answer("Баннер уже запущен", show_alert=True)
+                return await send_notice(callback, "Баннер уже запущен")
             await state.clear()
             await state.set_state(BannerRewardCreate.template_id)
             await state.update_data(
@@ -2299,9 +2346,9 @@ def build_router(services, settings) -> Router:
         if action == "banner_remove_background":
             banner = await services.banners.get_by_id(callback_data.banner_id)
             if banner is None:
-                return await callback.answer("Баннер не найден", show_alert=True)
+                return await send_notice(callback, "Баннер не найден")
             if not banner.can_edit():
-                return await callback.answer("Баннер уже запущен", show_alert=True)
+                return await send_notice(callback, "Баннер уже запущен")
             await state.clear()
             await state.set_state(BannerRewardCreate.template_id)
             await state.update_data(
@@ -2317,7 +2364,7 @@ def build_router(services, settings) -> Router:
             try:
                 await services.delete_banner(callback_data.banner_id)
             except (DomainError, ValidationError) as error:
-                return await callback.answer(f"❌ {error}", show_alert=True)
+                return await send_notice(callback, f"❌ {error}")
             return await show_admin(callback, services, "banners")
         if action == "cancel":
             await state.clear()
@@ -2388,7 +2435,7 @@ def build_router(services, settings) -> Router:
                 )
             except (DomainError, ValidationError, KeyError, ValueError) as error:
                 await state.clear()
-                return await callback.answer(f"❌ {error}", show_alert=True)
+                return await send_notice(callback, f"❌ {error}")
             await state.clear()
             return await show_admin(callback, services, "shop")
         if action == "banner_reward_guaranteed":

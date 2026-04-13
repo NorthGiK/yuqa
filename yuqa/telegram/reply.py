@@ -64,10 +64,32 @@ async def send_or_edit(
 ) -> Message | None:
     """Send a new message or update the current callback message."""
 
+    if (
+        getattr(event, "message", None) is not None
+        and
+        hasattr(event, "answer")
+    ):
+        await safe_edit(event.message, text, reply_markup)
+        return await event.answer()
+
+    if hasattr(event, "answer"):
+        return await event.answer(text, reply_markup=reply_markup)
+    return None
+
+
+async def send_notice(
+    event: Message | CallbackQuery,
+    text: str,
+    reply_markup: InlineKeyboardMarkup | None = None,
+) -> Message | None:
+    """Send a visible chat message from a callback flow."""
+
     if isinstance(event, CallbackQuery):
         if event.message is not None:
-            await safe_edit(event.message, text, reply_markup)
-        return await event.answer()
+            # The chat message is the user-facing notice; avoid an extra
+            # callback answer so Telegram does not render a transient toast.
+            return await event.message.answer(text, reply_markup=reply_markup)
+        return await event.answer(text)
     return await event.answer(text, reply_markup=reply_markup)
 
 

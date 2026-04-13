@@ -1,7 +1,5 @@
 """Helpers for running Alembic migrations programmatically."""
 
-from __future__ import annotations
-
 from pathlib import Path
 
 from alembic import command

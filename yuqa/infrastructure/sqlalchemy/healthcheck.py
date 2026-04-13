@@ -1,15 +1,16 @@
 """Container healthcheck entrypoint."""
 
-from __future__ import annotations
-
 from os import getenv
 from pathlib import Path
 
 from sqlalchemy import text
 from sqlalchemy.exc import SQLAlchemyError
+from dotenv import load_dotenv
 
 from yuqa.infrastructure.sqlalchemy.repositories import create_sync_engine
 
+
+load_dotenv()
 
 def _default_database_url() -> str:
     """Return the same default database URL as runtime settings."""

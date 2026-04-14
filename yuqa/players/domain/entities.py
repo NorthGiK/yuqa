@@ -39,7 +39,7 @@ class Player:
         """Increase wins and rating."""
 
         self.wins += 1
-        self.rating += 30 + random.randint(0, 5) 
+        self.rating += 30 + random.randint(0, 5)
 
     def add_loss(self) -> None:
         """Increase losses and lower rating a bit."""

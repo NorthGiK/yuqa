@@ -130,8 +130,29 @@ class InMemoryBattlePassSeasonRepository(_Store):
         return list(self.items.values())
 
 
+class InMemoryPremiumBattlePassSeasonRepository(_Store):
+    """Premium battle pass season storage."""
+
+    async def list_active(self):
+        return [season for season in self.items.values() if season.is_active]
+
+    async def list_all(self):
+        return list(self.items.values())
+
+
 class InMemoryBattlePassProgressRepository(_Store):
     """Battle pass progress storage."""
+
+    async def get_for_player(self, player_id, season_id):
+        return self.items.get((player_id, season_id))
+
+    async def save(self, item):
+        self.items[(item.player_id, item.season_id)] = item
+        return item
+
+
+class InMemoryPremiumBattlePassProgressRepository(_Store):
+    """Premium battle pass progress storage."""
 
     async def get_for_player(self, player_id, season_id):
         return self.items.get((player_id, season_id))

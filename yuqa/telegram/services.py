@@ -22,6 +22,7 @@ from yuqa.infrastructure.local import (
     CatalogStore,
     LocalBannerRepository,
     LocalBattlePassSeasonRepository,
+    LocalPremiumBattlePassSeasonRepository,
     LocalCardTemplateRepository,
     LocalIdeaRepository,
     LocalShopRepository,
@@ -31,6 +32,8 @@ from yuqa.infrastructure.memory import (
     InMemoryBannerRepository,
     InMemoryBattlePassProgressRepository,
     InMemoryBattlePassSeasonRepository,
+    InMemoryPremiumBattlePassProgressRepository,
+    InMemoryPremiumBattlePassSeasonRepository,
     InMemoryBattleRepository,
     InMemoryCardTemplateRepository,
     InMemoryClanRepository,
@@ -44,6 +47,8 @@ from yuqa.infrastructure.sqlalchemy.repositories import (
     PersistentBannerRepository,
     PersistentBattlePassProgressRepository,
     PersistentBattlePassSeasonRepository,
+    PersistentPremiumBattlePassProgressRepository,
+    PersistentPremiumBattlePassSeasonRepository,
     PersistentBattleRepository,
     PersistentCardTemplateRepository,
     PersistentClanRepository,
@@ -189,10 +194,22 @@ class TelegramServices:
             if self.catalog
             else InMemoryBattlePassSeasonRepository()
         )
+        self.premium_battle_pass_seasons = (
+            PersistentPremiumBattlePassSeasonRepository(self.store)
+            if self.store is not None
+            else LocalPremiumBattlePassSeasonRepository(self.catalog)
+            if self.catalog
+            else InMemoryPremiumBattlePassSeasonRepository()
+        )
         self.battle_pass_progress = (
             PersistentBattlePassProgressRepository(self.store)
             if self.store is not None
             else InMemoryBattlePassProgressRepository()
+        )
+        self.premium_battle_pass_progress = (
+            PersistentPremiumBattlePassProgressRepository(self.store)
+            if self.store is not None
+            else InMemoryPremiumBattlePassProgressRepository()
         )
         self.search_queue: dict[int, int] = (
             self.store.search_queue if self.store is not None else {}
@@ -233,6 +250,7 @@ class TelegramServices:
         self.free_resource_values = dict(_DEFAULT_FREE_RESOURCE_VALUES)
         self._load_free_reward_settings()
         self._seed_battle_pass()
+        self._seed_premium_battle_pass()
 
     # Public lookups -----------------------------------------------------
 
@@ -418,6 +436,68 @@ class TelegramServices:
             raise ForbiddenActionError("battle pass is not finished yet")
         await self.battle_pass_seasons.delete(season_id)
 
+    async def active_premium_battle_pass(self) -> BattlePassSeason | None:
+        """Return the currently active premium battle pass season."""
+
+        now = datetime.now(timezone.utc)
+        seasons = [
+            season
+            for season in await self.premium_battle_pass_seasons.list_active()
+            if season.is_active and season.start_at <= now <= season.end_at
+        ]
+        if not seasons:
+            return None
+        return sorted(seasons, key=lambda season: (season.start_at, season.id))[-1]
+
+    async def list_premium_battle_pass_seasons(self) -> list[BattlePassSeason]:
+        """Return every stored premium battle pass season sorted by dates."""
+
+        seasons: list[BattlePassSeason] = list(
+            getattr(self.premium_battle_pass_seasons, "items", {}).values()
+        )
+        return sorted(
+            seasons, key=lambda season: (season.start_at, season.id), reverse=True
+        )
+
+    async def create_premium_battle_pass_season(
+        self,
+        name: str,
+        start_at: datetime,
+        end_at: datetime,
+    ) -> BattlePassSeason:
+        """Create a new premium battle pass season with explicit dates."""
+
+        if not name.strip():
+            raise ValidationError("battle pass name must not be empty")
+        if start_at >= end_at:
+            raise ValidationError("start_at must be before end_at")
+        seasons = await self.list_premium_battle_pass_seasons()
+        for season in seasons:
+            if start_at <= season.end_at and end_at >= season.start_at:
+                raise ForbiddenActionError(
+                    "battle pass dates overlap with an existing season"
+                )
+        season = BattlePassSeason(
+            id=_next_id(getattr(self.premium_battle_pass_seasons, "items", {})),
+            name=name.strip(),
+            start_at=start_at,
+            end_at=end_at,
+            levels=[],
+            is_active=True,
+        )
+        await self.premium_battle_pass_seasons.save(season)
+        return season
+
+    async def delete_premium_battle_pass_season(self, season_id: int) -> None:
+        """Delete an ended premium battle pass season."""
+
+        season = await self.premium_battle_pass_seasons.get_by_id(season_id)
+        if season is None:
+            raise EntityNotFoundError("battle pass season not found")
+        if season.end_at > datetime.now(timezone.utc):
+            raise ForbiddenActionError("battle pass is not finished yet")
+        await self.premium_battle_pass_seasons.delete(season_id)
+
     async def free_rewards_status(self, telegram_id: int) -> dict[str, object]:
         """Return cooldown and configuration data for the free rewards screen."""
 
@@ -534,6 +614,26 @@ class TelegramServices:
         await self.players.save(player)
         return player
 
+    async def set_player_premium(self, telegram_id: int, is_premium: bool) -> Player:
+        """Set premium status for an existing player."""
+
+        player = await self.get_player(telegram_id)
+        if player is None:
+            raise EntityNotFoundError("player not found")
+        player.is_premium = is_premium
+        await self.players.save(player)
+        return player
+
+    async def toggle_player_premium(self, telegram_id: int) -> Player:
+        """Toggle premium status for an existing player."""
+
+        player = await self.get_player(telegram_id)
+        if player is None:
+            raise EntityNotFoundError("player not found")
+        player.is_premium = not player.is_premium
+        await self.players.save(player)
+        return player
+
     async def delete_player(self, telegram_id: int) -> Player:
         """Delete a player and clean up related runtime state."""
 
@@ -563,6 +663,9 @@ class TelegramServices:
         for battle_pass_key in list(self.battle_pass_progress.items):
             if battle_pass_key[0] == telegram_id:
                 await self.battle_pass_progress.delete(battle_pass_key)
+        for battle_pass_key in list(self.premium_battle_pass_progress.items):
+            if battle_pass_key[0] == telegram_id:
+                await self.premium_battle_pass_progress.delete(battle_pass_key)
 
         for battle_id, battle in list(self.battles.items.items()):
             if telegram_id in {battle.player_one_id, battle.player_two_id}:
@@ -1303,6 +1406,12 @@ class TelegramServices:
         season = await self.active_battle_pass()
         return [] if season is None else list(season.levels)
 
+    async def list_premium_battle_pass_levels(self) -> list[BattlePassLevel]:
+        """Return levels from the active premium battle pass season."""
+
+        season = await self.active_premium_battle_pass()
+        return [] if season is None else list(season.levels)
+
     async def add_battle_pass_level(
         self,
         level_number: int,
@@ -1325,6 +1434,28 @@ class TelegramServices:
         await self.battle_pass_seasons.save(season)
         return season
 
+    async def add_premium_battle_pass_level(
+        self,
+        level_number: int,
+        required_points: int,
+        reward: QuestReward,
+    ) -> BattlePassSeason:
+        """Add or replace a level in the active premium battle pass season."""
+
+        season = await self.active_premium_battle_pass()
+        if season is None:
+            raise EntityNotFoundError("battle pass season not found")
+        now = datetime.now(timezone.utc)
+        if not (season.start_at <= now <= season.end_at):
+            raise ForbiddenActionError("battle pass season is not active")
+        season.levels = [
+            level for level in season.levels if level.level_number != level_number
+        ]
+        season.levels.append(BattlePassLevel(level_number, required_points, reward))
+        season.levels.sort(key=lambda level: level.level_number)
+        await self.premium_battle_pass_seasons.save(season)
+        return season
+
     async def active_battle_pass_progress(self, player_id: int) -> BattlePassProgress:
         """Return the active season progress for a player."""
 
@@ -1335,6 +1466,22 @@ class TelegramServices:
         if progress is None:
             progress = BattlePassProgress(player_id=player_id, season_id=season.id)
             await self.battle_pass_progress.save(progress)
+        return progress
+
+    async def active_premium_battle_pass_progress(
+        self, player_id: int
+    ) -> BattlePassProgress:
+        """Return the active premium season progress for a player."""
+
+        season = await self.active_premium_battle_pass()
+        if season is None:
+            raise EntityNotFoundError("battle pass season not found")
+        progress = await self.premium_battle_pass_progress.get_for_player(
+            player_id, season.id
+        )
+        if progress is None:
+            progress = BattlePassProgress(player_id=player_id, season_id=season.id)
+            await self.premium_battle_pass_progress.save(progress)
         return progress
 
     async def buy_battle_pass_level(
@@ -1372,6 +1519,45 @@ class TelegramServices:
         await self.battle_pass_progress.save(progress)
         return progress, next_level.level_number
 
+    async def buy_premium_battle_pass_level(
+        self, telegram_id: int
+    ) -> tuple[BattlePassProgress, int]:
+        """Buy the next unclaimed premium battle pass level for 250 coins."""
+
+        season = await self.active_premium_battle_pass()
+        if season is None:
+            raise EntityNotFoundError("battle pass season not found")
+        player = await self.get_or_create_player(telegram_id)
+        if not player.is_premium:
+            raise ForbiddenActionError(
+                "premium battle pass is available only for premium players"
+            )
+        progress = await self.active_premium_battle_pass_progress(telegram_id)
+        next_level = next(
+            (
+                level
+                for level in season.levels
+                if level.level_number not in progress.claimed_levels
+            ),
+            None,
+        )
+        if next_level is None:
+            raise ValidationError("battle pass is already fully claimed")
+        player.wallet.spend(ResourceType.COINS, 250)
+        progress.points = max(progress.points, next_level.required_points)
+        progress.claimed_levels.add(next_level.level_number)
+        if next_level.reward.coins:
+            player.wallet.add(ResourceType.COINS, next_level.reward.coins)
+        if next_level.reward.crystals:
+            player.wallet.add(ResourceType.CRYSTALS, next_level.reward.crystals)
+        if next_level.reward.orbs:
+            player.wallet.add(ResourceType.ORBS, next_level.reward.orbs)
+        if next_level.reward.battle_pass_points:
+            player.battle_pass_progress.append(next_level.reward.battle_pass_points)
+        await self.players.save(player)
+        await self.premium_battle_pass_progress.save(progress)
+        return progress, next_level.level_number
+
     async def admin_counts(self) -> dict[str, int]:
         """Return a small admin dashboard snapshot."""
 
@@ -1386,6 +1572,9 @@ class TelegramServices:
             "standard_cards": len(await self.list_standard_cards()),
             "universes": len(await self.list_universes()),
             "battle_pass_levels": len(await self.list_battle_pass_levels()),
+            "premium_battle_pass_levels": len(
+                await self.list_premium_battle_pass_levels()
+            ),
             "ideas_pending": sum(
                 1 for idea in ideas if idea.status == IdeaStatus.PENDING
             ),
@@ -1637,6 +1826,26 @@ class TelegramServices:
         )
         if not self.battle_pass_seasons.items:
             self.battle_pass_seasons.items[1] = season
+            if self.store is not None:
+                self.store.save()
+
+    def _seed_premium_battle_pass(self) -> None:
+        """Create a default active premium battle pass season."""
+
+        now = datetime.now(timezone.utc)
+        season = BattlePassSeason(
+            id=1,
+            name="Премиум сезон 1",
+            start_at=now - timedelta(days=1),
+            end_at=now + timedelta(days=30),
+            levels=[
+                BattlePassLevel(1, 10, QuestReward(coins=150)),
+                BattlePassLevel(2, 20, QuestReward(crystals=15)),
+                BattlePassLevel(3, 30, QuestReward(orbs=3)),
+            ],
+        )
+        if not self.premium_battle_pass_seasons.items:
+            self.premium_battle_pass_seasons.items[1] = season
             if self.store is not None:
                 self.store.save()
 

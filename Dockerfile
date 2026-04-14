@@ -4,7 +4,7 @@ ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
     PIP_NO_CACHE_DIR=1 \
     YUQA_DATA_DIR=/data \
-    DATABASE_URL=sqlite:////data/yuqa.db \
+    DATABASE_URL=sqlite+aiosqlite:///data/yuqa.db \
     YUQA_AUTO_MIGRATE=true \
     UV_NO_DEV=1
 
@@ -18,7 +18,7 @@ COPY yuqa ./yuqa
 
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
 
-RUN /bin/uv sync --no-cache
+RUN /bin/uv sync --no-cache --extra docker
 
 RUN mkdir -p /data && chown -R appuser:appuser /app /data
 

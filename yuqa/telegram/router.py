@@ -22,6 +22,7 @@ from yuqa.telegram.callbacks import (
     BannerCallback,
     BattleQueueCallback,
     BattlePassCallback,
+    PremiumBattlePassCallback,
     CardCallback,
     ClanCallback,
     DeckCallback,
@@ -81,6 +82,9 @@ from yuqa.telegram.texts import (
     battle_pass_seasons_text,
     battle_pass_season_wizard_text,
     battle_pass_text,
+    premium_battle_pass_admin_text,
+    premium_battle_pass_seasons_text,
+    premium_battle_pass_text,
     battle_started_text,
     battle_text,
     banner_wizard_text,
@@ -120,6 +124,7 @@ from yuqa.telegram.ui import (
     banner_markup,
     battle_markup,
     battle_pass_markup,
+    premium_battle_pass_markup,
     card_level_up_confirm_markup,
     card_markup,
     cards_markup,
@@ -336,11 +341,15 @@ async def show_home(event, services, player_id: int, *, is_admin: bool = False):
     if isinstance(event, CallbackQuery):
         if event.message is not None:
             await event.message.answer(
-                menu_text(player), reply_markup=main_menu_markup(is_admin=is_admin)
+                menu_text(player),
+                reply_markup=main_menu_markup(
+                    is_admin=is_admin, is_premium=player.is_premium
+                ),
             )
         return await event.answer()
     await event.answer(
-        menu_text(player), reply_markup=main_menu_markup(is_admin=is_admin)
+        menu_text(player),
+        reply_markup=main_menu_markup(is_admin=is_admin, is_premium=player.is_premium),
     )
 
 
@@ -643,6 +652,20 @@ async def show_battle_pass(event, services, player_id: int):
     )
 
 
+async def show_premium_battle_pass(event, services, player_id: int):
+    """Show the premium battle pass progress for premium players."""
+
+    player = await services.get_or_create_player(player_id)
+    season = await services.active_premium_battle_pass()
+    await send_or_edit(
+        event,
+        premium_battle_pass_text(season, player),
+        premium_battle_pass_markup(
+            can_buy_level=season is not None and player.is_premium
+        ),
+    )
+
+
 async def show_tops(event, services, mode: str = "rating"):
     """Show one users-top screen."""
 
@@ -686,109 +709,140 @@ async def show_admin(
     shop_items = list(services.shop.items.values())
     standard_cards = await services.list_standard_cards()
     universes = await services.list_universes()
-    if section == "cards":
-        text, markup = (
-            admin_text(counts, "cards") + "\n\n" + admin_cards_text(cards),
-            admin_markup("cards"),
-        )
-    elif section == "profile_backgrounds":
-        text, markup = (
-            admin_text(counts, "profile_backgrounds")
-            + "\n\n"
-            + admin_profile_backgrounds_text(profile_backgrounds),
-            admin_markup("profile_backgrounds"),
-        )
-    elif section == "players":
-        text, markup = (
-            admin_text(counts, "players")
-            + "\n\n<i>Через этот раздел можно начислять Creator Points и задавать титул игроку по ID.</i>",
-            admin_markup("players"),
-        )
-    elif section == "banners":
-        if banners:
-            banner = banners[0]
-            text = (
-                admin_text(counts, "banners")
-                + "\n\n"
-                + banner_text(banner, banner.can_edit())
-                + "\n\n"
-                + banner_pool_text(banner, templates, backgrounds)
-            )
-            markup = admin_banner_markup(banner.id, banner.can_edit())
-        else:
+
+    match section:
+        case "cards":
             text, markup = (
-                admin_text(counts, "banners")
-                + "\n\n<i>Пока баннеров нет. Самое время создать первый ✨</i>",
-                admin_markup("banners"),
+                admin_text(counts, "cards") + "\n\n" + admin_cards_text(cards),
+                admin_markup("cards"),
             )
-    elif section == "shop":
-        text, markup = (
-            admin_text(counts, "shop") + "\n\n" + shop_text(shop_items),
-            admin_markup("shop"),
-        )
-    elif section == "standard_cards":
-        text, markup = (
-            admin_text(counts, "standard_cards")
-            + "\n\n"
-            + standard_cards_text(standard_cards, templates),
-            admin_markup("standard_cards"),
-        )
-    elif section == "universes":
-        text, markup = (
-            admin_text(counts, "universes") + "\n\n" + universes_text(universes),
-            admin_markup("universes"),
-        )
-    elif section == "battle_pass":
-        season = await services.active_battle_pass()
-        seasons = await services.list_battle_pass_seasons()
-        text, markup = (
-            admin_text(counts, "battle_pass")
-            + "\n\n"
-            + battle_pass_admin_text(season)
-            + "\n\n"
-            + battle_pass_seasons_text(seasons),
-            admin_markup("battle_pass"),
-        )
-    elif section == "free_rewards":
-        text, markup = (
-            admin_text(counts, "free_rewards")
-            + "\n\n"
-            + free_rewards_admin_text(services.free_reward_settings()),
-            admin_markup("free_rewards"),
-        )
-    elif section in {
-        "ideas_pending",
-        "ideas_public",
-        "ideas_collection",
-        "ideas_rejected",
-    }:
-        status = {
-            "ideas_pending": IdeaStatus.PENDING,
-            "ideas_public": IdeaStatus.PUBLISHED,
-            "ideas_collection": IdeaStatus.COLLECTED,
-            "ideas_rejected": IdeaStatus.REJECTED,
-        }[section]
-        ideas, has_prev, has_next = await services.list_ideas(status=status, page=page)
-        text, markup = (
-            admin_text(counts, section)
-            + "\n\n"
-            + ideas_text(
-                ideas,
-                page,
-                title="💡 <b>Список идей</b>",
-                empty_text="В этом разделе пока пусто.",
-            ),
-            admin_ideas_markup(
-                ideas,
-                page,
-                scope=section.replace("ideas_", "admin_"),
-                has_prev=has_prev,
-                has_next=has_next,
-            ),
-        )
-    else:
-        text, markup = admin_text(counts, "dashboard"), admin_markup("dashboard")
-    await send_or_edit(event, text, markup)
+
+        case "profile_backgrounds":
+            text, markup = (
+                admin_text(counts, "profile_backgrounds")
+                + "\n\n"
+                + admin_profile_backgrounds_text(profile_backgrounds),
+                admin_markup("profile_backgrounds"),
+            )
+
+        case "players":
+            text, markup = (
+                admin_text(counts, "players")
+                + "\n\n<i>Через этот раздел можно начислять Creator Points, задавать титул и переключать premium-статус игроку по ID.</i>",
+                admin_markup("players"),
+            )
+
+        case "banners":
+            if banners:
+                banner = banners[0]
+                text = (
+                    admin_text(counts, "banners")
+                    + "\n\n"
+                    + banner_text(banner, banner.can_edit())
+                    + "\n\n"
+                    + banner_pool_text(banner, templates, backgrounds)
+                )
+                markup = admin_banner_markup(banner.id, banner.can_edit())
+            else:
+                text, markup = (
+                    admin_text(counts, "banners")
+                    + "\n\n<i>Пока баннеров нет. Самое время создать первый ✨</i>",
+                    admin_markup("banners"),
+                )
+
+        case "shop":
+            text, markup = (
+                admin_text(counts, "shop") + "\n\n" + shop_text(shop_items),
+                admin_markup("shop"),
+            )
+
+        case "standard_cards":
+            text, markup = (
+                admin_text(counts, "standard_cards")
+                + "\n\n"
+                + standard_cards_text(standard_cards, templates),
+                admin_markup("standard_cards"),
+            )
+
+        case "universes":
+            text, markup = (
+                admin_text(counts, "universes") + "\n\n" + universes_text(universes),
+                admin_markup("universes"),
+            )
+
+        case "battle_pass":
+            season = await services.active_battle_pass()
+            seasons = await services.list_battle_pass_seasons()
+            text, markup = (
+                admin_text(counts, "battle_pass")
+                + "\n\n"
+                + battle_pass_admin_text(season)
+                + "\n\n"
+                + battle_pass_seasons_text(seasons),
+                admin_markup("battle_pass"),
+            )
+
+        case "premium_battle_pass":
+            season = await services.active_premium_battle_pass()
+            seasons = await services.list_premium_battle_pass_seasons()
+            text, markup = (
+                admin_text(counts, "premium_battle_pass")
+                + "\n\n"
+                + premium_battle_pass_admin_text(season)
+                + "\n\n"
+                + premium_battle_pass_seasons_text(seasons),
+                admin_markup("premium_battle_pass"),
+            )
+
+        case "free_rewards":
+            text, markup = (
+                admin_text(counts, "free_rewards")
+                + "\n\n"
+                + free_rewards_admin_text(services.free_reward_settings()),
+                admin_markup("free_rewards"),
+            )
+
+        case "dashboard":
+            text, markup = admin_text(counts, "dashboard"), admin_markup("dashboard")
+
+        case _:
+            if section in {
+                ipen := "ideas_pending",
+                ipub := "ideas_public",
+                icol := "ideas_collection",
+                irej := "ideas_rejected",
+            }:
+                status = {
+                    ipen: IdeaStatus.PENDING,
+                    ipub: IdeaStatus.PUBLISHED,
+                    icol: IdeaStatus.COLLECTED,
+                    irej: IdeaStatus.REJECTED,
+                }[section]
+                ideas, has_prev, has_next = await services.list_ideas(
+                    status=status, page=page
+                )
+                text, markup = (
+                    admin_text(counts, section)
+                    + "\n\n"
+                    + ideas_text(
+                        ideas,
+                        page,
+                        title="💡 <b>Список идей</b>",
+                        empty_text="В этом разделе пока пусто.",
+                    ),
+                    admin_ideas_markup(
+                        ideas,
+                        page,
+                        scope=section.replace("ideas_", "admin_"),
+                        has_prev=has_prev,
+                        has_next=has_next,
+                    ),
+                )
+
+    try:
+        await send_or_edit(event, text, markup)
+    except NameError:
+        return
 
 
 # Clan flow -----------------------------------------------------------------
@@ -837,38 +891,56 @@ async def capture_clan_icon(message: Message, services, state: FSMContext):
 # Battle pass wizard -------------------------------------------------------
 
 
-async def start_battle_pass_level_create(message: Message, state: FSMContext):
+async def start_battle_pass_level_create(
+    message: Message, state: FSMContext, *, premium: bool = False
+):
     """Open the Battle Pass level wizard from the first step."""
 
     await state.clear()
     await state.set_state(BattlePassLevelCreate.level_number)
+    mode = "premium" if premium else "standard"
+    await state.update_data(battle_pass_mode=mode)
     await message.answer(
         battle_pass_level_wizard_text("уровень", {}),
-        reply_markup=admin_wizard_markup("battle_pass"),
+        reply_markup=admin_wizard_markup(
+            "premium_battle_pass" if premium else "battle_pass"
+        ),
     )
 
 
 async def capture_battle_pass_level_number(message: Message, state: FSMContext):
     """Store the level number and move to the points step."""
 
+    data = await state.get_data()
+    back_section = (
+        "premium_battle_pass"
+        if data.get("battle_pass_mode") == "premium"
+        else "battle_pass"
+    )
     level_number = _parse_int(message.text or "0", "level number", positive=True)
     await state.update_data(level_number=level_number)
     await state.set_state(BattlePassLevelCreate.required_points)
     await message.answer(
         battle_pass_level_wizard_text("очки", await state.get_data()),
-        reply_markup=admin_wizard_markup("battle_pass"),
+        reply_markup=admin_wizard_markup(back_section),
     )
 
 
 async def capture_battle_pass_required_points(message: Message, state: FSMContext):
     """Store the required points and move to the reward step."""
 
+    data = await state.get_data()
+    back_section = (
+        "premium_battle_pass"
+        if data.get("battle_pass_mode") == "premium"
+        else "battle_pass"
+    )
     required_points = _parse_int(message.text or "0", "required points", positive=True)
     await state.update_data(required_points=required_points)
     await state.set_state(BattlePassLevelCreate.reward)
     await message.answer(
         battle_pass_level_wizard_text("награда", await state.get_data()),
-        reply_markup=admin_wizard_markup("battle_pass"),
+        reply_markup=admin_wizard_markup(back_section),
     )
 
 
@@ -878,46 +950,77 @@ async def capture_battle_pass_reward(message: Message, services, state: FSMConte
     data = await state.get_data()
     try:
         reward = _parse_reward_bundle(message.text or "")
-        await services.add_battle_pass_level(
-            data["level_number"],
-            data["required_points"],
-            reward,
-        )
+        if data.get("battle_pass_mode") == "premium":
+            await services.add_premium_battle_pass_level(
+                data["level_number"],
+                data["required_points"],
+                reward,
+            )
+        else:
+            await services.add_battle_pass_level(
+                data["level_number"],
+                data["required_points"],
+                reward,
+            )
     except (DomainError, ValidationError, KeyError, ValueError) as error:
         await state.clear()
         return await message.answer(f"❌ {error}")
     await state.clear()
-    await message.answer("✅ Уровень Battle Pass сохранён!")
-    await show_admin(message, services, "battle_pass")
+    is_premium = data.get("battle_pass_mode") == "premium"
+    await message.answer(
+        "✅ Уровень Premium Battle Pass сохранён!"
+        if is_premium
+        else "✅ Уровень Battle Pass сохранён!"
+    )
+    await show_admin(
+        message, services, "premium_battle_pass" if is_premium else "battle_pass"
+    )
 
 
-async def start_battle_pass_season_create(message: Message, state: FSMContext):
+async def start_battle_pass_season_create(
+    message: Message, state: FSMContext, *, premium: bool = False
+):
     """Open the Battle Pass season wizard from the first step."""
 
     await state.clear()
     await state.set_state(BattlePassSeasonCreate.name)
+    await state.update_data(battle_pass_mode="premium" if premium else "standard")
     await message.answer(
         battle_pass_season_wizard_text("название", {}),
-        reply_markup=admin_wizard_markup("battle_pass"),
+        reply_markup=admin_wizard_markup(
+            "premium_battle_pass" if premium else "battle_pass"
+        ),
     )
 
 
 async def capture_battle_pass_season_name(message: Message, state: FSMContext):
     """Store the season name and ask for the start date."""
 
+    data = await state.get_data()
+    back_section = (
+        "premium_battle_pass"
+        if data.get("battle_pass_mode") == "premium"
+        else "battle_pass"
+    )
     if not message.text:
         return await message.answer("Напиши название текстом 🙂")
     await state.update_data(name=message.text.strip())
     await state.set_state(BattlePassSeasonCreate.start_at)
     await message.answer(
         battle_pass_season_wizard_text("старт", await state.get_data()),
-        reply_markup=admin_wizard_markup("battle_pass"),
+        reply_markup=admin_wizard_markup(back_section),
     )
 
 
 async def capture_battle_pass_season_start_at(message: Message, state: FSMContext):
     """Store the start date and ask for the end date."""
 
+    data = await state.get_data()
+    back_section = (
+        "premium_battle_pass"
+        if data.get("battle_pass_mode") == "premium"
+        else "battle_pass"
+    )
     start_at = _parse_dt(message.text or "")
     if start_at is None:
         return await message.answer("Введи дату старта в ISO-формате 🙂")
@@ -925,7 +1028,7 @@ async def capture_battle_pass_season_start_at(message: Message, state: FSMContex
     await state.set_state(BattlePassSeasonCreate.end_at)
     await message.answer(
         battle_pass_season_wizard_text("финиш", await state.get_data()),
-        reply_markup=admin_wizard_markup("battle_pass"),
+        reply_markup=admin_wizard_markup(back_section),
     )
 
 
@@ -939,26 +1042,47 @@ async def capture_battle_pass_season_end_at(
     if end_at is None:
         return await message.answer("Введи дату финиша в ISO-формате 🙂")
     try:
-        await services.create_battle_pass_season(data["name"], data["start_at"], end_at)
+        if data.get("battle_pass_mode") == "premium":
+            await services.create_premium_battle_pass_season(
+                data["name"], data["start_at"], end_at
+            )
+        else:
+            await services.create_battle_pass_season(
+                data["name"], data["start_at"], end_at
+            )
     except (DomainError, ValidationError, KeyError, ValueError) as error:
         await state.clear()
         return await message.answer(f"❌ {error}")
     await state.clear()
+    is_premium = data.get("battle_pass_mode") == "premium"
     await message.answer(
-        "✅ Battle Pass создан!",
-        reply_markup=admin_wizard_markup("battle_pass"),
+        "✅ Premium Battle Pass создан!" if is_premium else "✅ Battle Pass создан!",
+        reply_markup=admin_wizard_markup(
+            "premium_battle_pass" if is_premium else "battle_pass"
+        ),
     )
-    await show_admin(message, services, "battle_pass")
+    await show_admin(
+        message, services, "premium_battle_pass" if is_premium else "battle_pass"
+    )
 
 
-async def start_battle_pass_season_delete(message: Message, state: FSMContext):
+async def start_battle_pass_season_delete(
+    message: Message, state: FSMContext, *, premium: bool = False
+):
     """Ask for the ended season id to delete."""
 
     await state.clear()
     await state.set_state(BattlePassSeasonDelete.season_id)
+    await state.update_data(battle_pass_mode="premium" if premium else "standard")
     await message.answer(
-        "Введи ID завершённого Battle Pass для удаления 🗑️",
-        reply_markup=admin_wizard_markup("battle_pass"),
+        (
+            "Введи ID завершённого Premium Battle Pass для удаления 🗑️"
+            if premium
+            else "Введи ID завершённого Battle Pass для удаления 🗑️"
+        ),
+        reply_markup=admin_wizard_markup(
+            "premium_battle_pass" if premium else "battle_pass"
+        ),
     )
 
 
@@ -967,14 +1091,24 @@ async def capture_battle_pass_season_delete(
 ):
     """Delete an ended battle pass season."""
 
+    data = await state.get_data()
     try:
         season_id = _parse_int(message.text or "0", "season id", positive=True)
-        await services.delete_battle_pass_season(season_id)
+        if data.get("battle_pass_mode") == "premium":
+            await services.delete_premium_battle_pass_season(season_id)
+        else:
+            await services.delete_battle_pass_season(season_id)
     except (DomainError, ValidationError) as error:
         await state.clear()
         return await message.answer(f"❌ {error}")
     await state.clear()
-    await show_admin(message, services, "battle_pass")
+    await show_admin(
+        message,
+        services,
+        "premium_battle_pass"
+        if data.get("battle_pass_mode") == "premium"
+        else "battle_pass",
+    )
 
 
 # Free rewards admin ------------------------------------------------------
@@ -1113,6 +1247,11 @@ async def start_admin_player_edit(
             "🪄 <b>Creator Points</b>\nВведи ID игрока.",
             reply_markup=admin_wizard_markup("players"),
         )
+    if mode == "premium_toggle":
+        return await message.answer(
+            "💎 <b>Премиум-статус</b>\nВведи ID игрока.",
+            reply_markup=admin_wizard_markup("players"),
+        )
     return await message.answer(
         "✨ <b>Титул игрока</b>\nВведи ID игрока.",
         reply_markup=admin_wizard_markup("players"),
@@ -1130,12 +1269,30 @@ async def start_admin_player_delete(message: Message, state: FSMContext) -> Mess
     )
 
 
-async def capture_admin_player_id(message: Message, state: FSMContext) -> Message:
+async def capture_admin_player_id(
+    message: Message, services: TelegramServices, state: FSMContext
+) -> Message:
     """Store the target player id and ask for the value."""
 
     player_id = _parse_int(message.text or "0", "player id", positive=True)
     data: dict[str, object] = await state.get_data()
     await state.update_data(player_id=player_id)
+    if data.get("mode") == "premium_toggle":
+        player = await services.get_player(player_id)
+        if player is None:
+            await state.clear()
+            return await message.answer("❌ player not found")
+        await state.set_state(AdminPlayerEdit.value)
+        return await message.answer(
+            f"Текущий premium-статус игрока <code>{player_id}</code>: "
+            f"<code>{'yes' if player.is_premium else 'no'}</code>\n"
+            "<i>Нажми «Переключить», чтобы сменить значение, или «Отмена».</i>",
+            reply_markup=admin_choice_markup(
+                "players_premium_toggle_confirm",
+                [("🔁 Переключить", "yes"), ("❌ Отмена", "no")],
+                "players",
+            ),
+        )
     await state.set_state(AdminPlayerEdit.value)
     if data.get("mode") == "creator_points":
         return await message.answer(
@@ -1184,6 +1341,10 @@ async def capture_admin_player_value(
             notice = (
                 f"✅ Игроку <code>{player.telegram_id}</code> начислено "
                 f"<code>{player.creator_points}</code> Creator Points."
+            )
+        elif mode == "premium_toggle":
+            return await message.answer(
+                "Используй кнопки «Переключить» или «Отмена» под сообщением."
             )
         else:
             player = await services.set_player_title(player_id, message.text)
@@ -1809,6 +1970,10 @@ def build_router(services, settings) -> Router:
             return await show_deck_builder(message, services, message.from_user.id)
         if text == "🏁 Battle Pass":
             return await show_battle_pass(message, services, message.from_user.id)
+        if text == "💎 Premium Battle Pass":
+            return await show_premium_battle_pass(
+                message, services, message.from_user.id
+            )
         if text == "🏰 Клан":
             return await show_clan(message, services, message.from_user.id)
         if text == "🛒 Магазин":
@@ -1862,6 +2027,8 @@ def build_router(services, settings) -> Router:
             await show_deck_builder(callback, services, callback.from_user.id)
         elif section == "battle_pass":
             await show_battle_pass(callback, services, callback.from_user.id)
+        elif section == "premium_battle_pass":
+            await show_premium_battle_pass(callback, services, callback.from_user.id)
         elif section == "admin" and callback.from_user.id in settings.admin_ids:
             await show_admin(callback, services)
         elif section == "admin":
@@ -2194,6 +2361,25 @@ def build_router(services, settings) -> Router:
             f"✅ Куплен уровень {level_number}. У тебя {progress.points} очков.",
         )
 
+    @router.callback_query(PremiumBattlePassCallback.filter())
+    async def premium_battle_pass_actions(
+        callback: CallbackQuery, callback_data: PremiumBattlePassCallback
+    ):
+        if not callback.from_user:
+            return await callback.answer()
+        if callback_data.action != "buy_level":
+            return await callback.answer()
+        try:
+            progress, level_number = await services.buy_premium_battle_pass_level(
+                callback.from_user.id
+            )
+        except (DomainError, ValidationError, EntityNotFoundError) as error:
+            return await send_notice(callback, f"❌ {error}")
+        return await send_notice(
+            callback,
+            f"✅ Куплен premium-уровень {level_number}. У тебя {progress.points} очков.",
+        )
+
     @router.callback_query(DeckCallback.filter())
     async def deck_actions(callback: CallbackQuery, callback_data: DeckCallback):
         if not callback.from_user:
@@ -2251,8 +2437,33 @@ def build_router(services, settings) -> Router:
             return await start_admin_player_edit(
                 callback.message, state, "creator_points"
             )
+        if action == "players_premium_toggle":
+            return await start_admin_player_edit(
+                callback.message, state, "premium_toggle"
+            )
         if action == "players_title":
             return await start_admin_player_edit(callback.message, state, "title")
+        if action == "players_premium_toggle_confirm":
+            data: dict[str, object] = await state.get_data()
+            player_id = data.get("player_id")
+            if not isinstance(player_id, int):
+                await state.clear()
+                return await send_notice(callback, "❌ player id is missing")
+            if callback_data.value == "no":
+                await state.clear()
+                await send_notice(callback, "Переключение отменено.")
+                return await show_admin(callback, services, "players")
+            try:
+                player = await services.toggle_player_premium(player_id)
+            except (DomainError, ValidationError, EntityNotFoundError) as error:
+                await state.clear()
+                return await send_notice(callback, f"❌ {error}")
+            await state.clear()
+            await callback.message.answer(
+                f"✅ Premium-статус игрока <code>{player.telegram_id}</code>: "
+                f"<code>{'yes' if player.is_premium else 'no'}</code>"
+            )
+            return await show_admin(callback, services, "players")
         if action == "delete_player":
             return await start_admin_player_delete(callback.message, state)
         if action == "delete_card":
@@ -2449,6 +2660,18 @@ def build_router(services, settings) -> Router:
             return await start_battle_pass_season_create(callback.message, state)
         if action == "battle_pass_delete_season":
             return await start_battle_pass_season_delete(callback.message, state)
+        if action == "premium_battle_pass_add_level":
+            return await start_battle_pass_level_create(
+                callback.message, state, premium=True
+            )
+        if action == "premium_battle_pass_create_season":
+            return await start_battle_pass_season_create(
+                callback.message, state, premium=True
+            )
+        if action == "premium_battle_pass_delete_season":
+            return await start_battle_pass_season_delete(
+                callback.message, state, premium=True
+            )
         if action == "free_rewards_card_weights":
             return await start_free_rewards_edit(
                 callback.message, state, "card_weights"
@@ -2527,7 +2750,7 @@ def build_router(services, settings) -> Router:
 
     @router.message(AdminPlayerEdit.player_id)
     async def _admin_player_id(message: Message, state: FSMContext):
-        await capture_admin_player_id(message, state)
+        await capture_admin_player_id(message, services, state)
 
     @router.message(AdminPlayerEdit.value)
     async def _admin_player_value(message: Message, state: FSMContext):
@@ -2746,5 +2969,10 @@ def build_router(services, settings) -> Router:
     async def open_battle_pass(message: Message):
         if message.from_user:
             await show_battle_pass(message, services, message.from_user.id)
+
+    @router.message(Command("premium_battle_pass"))
+    async def open_premium_battle_pass(message: Message):
+        if message.from_user:
+            await show_premium_battle_pass(message, services, message.from_user.id)
 
     return router

@@ -400,6 +400,7 @@ class CatalogStore:
         self.banners: dict[int, Banner] = {}
         self.shop_items: dict[int, ShopItem] = {}
         self.battle_pass_seasons: dict[int, BattlePassSeason] = {}
+        self.premium_battle_pass_seasons: dict[int, BattlePassSeason] = {}
         self.ideas: dict[int, Idea] = {}
         self.standard_cards: list[int] = []
         self.universes: list[str] = [
@@ -432,6 +433,10 @@ class CatalogStore:
             item["id"]: _battle_pass_season_from_dict(item)
             for item in data.get("battle_pass_seasons", [])
         }
+        self.premium_battle_pass_seasons = {
+            item["id"]: _battle_pass_season_from_dict(item)
+            for item in data.get("premium_battle_pass_seasons", [])
+        }
         self.ideas = {
             item["id"]: _idea_from_dict(item) for item in data.get("ideas", [])
         }
@@ -455,6 +460,10 @@ class CatalogStore:
                 _battle_pass_season_to_dict(item)
                 for item in self.battle_pass_seasons.values()
             ],
+            "premium_battle_pass_seasons": [
+                _battle_pass_season_to_dict(item)
+                for item in self.premium_battle_pass_seasons.values()
+            ],
             "ideas": [_idea_to_dict(item) for item in self.ideas.values()],
             "standard_cards": list(self.standard_cards),
             "universes": list(self.universes),
@@ -473,6 +482,7 @@ class CatalogStore:
             "banners": self.banners,
             "shop_items": self.shop_items,
             "battle_pass_seasons": self.battle_pass_seasons,
+            "premium_battle_pass_seasons": self.premium_battle_pass_seasons,
             "ideas": self.ideas,
         }[section]
         return max(items, default=0) + 1
@@ -571,6 +581,22 @@ class LocalBattlePassSeasonRepository(_CatalogRepository):
     """Battle pass season storage backed by the local catalog."""
 
     section = "battle_pass_seasons"
+
+    def __init__(self, store: CatalogStore | None = None) -> None:
+        super().__init__(store)
+        self._load_from_store()
+
+    async def list_active(self):
+        return [season for season in self.items.values() if season.is_active]
+
+    async def list_all(self):
+        return list(self.items.values())
+
+
+class LocalPremiumBattlePassSeasonRepository(_CatalogRepository):
+    """Premium battle pass season storage backed by the local catalog."""
+
+    section = "premium_battle_pass_seasons"
 
     def __init__(self, store: CatalogStore | None = None) -> None:
         super().__init__(store)

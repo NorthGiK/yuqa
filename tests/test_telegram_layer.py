@@ -36,6 +36,7 @@ from yuqa.telegram.router import (
     show_cards,
     show_deck_builder,
     show_free_rewards,
+    show_premium_battle_pass,
     show_profile,
     show_tops,
 )
@@ -45,6 +46,7 @@ from yuqa.telegram.texts import (
     battle_text,
     cards_text,
     menu_text,
+    premium_battle_pass_text,
     profile_backgrounds_text,
     profile_text,
     tops_text,
@@ -96,6 +98,8 @@ async def test_home_and_menu_are_localized() -> None:
     assert "🖼 Фоны профиля" in buttons
     assert "📚 Моя коллекция" in buttons
     assert "🧱 Конструктор колоды" in buttons
+    assert "💎 Premium Battle Pass" not in buttons
+    assert "💎 Premium Battle Pass" in _button_texts(main_menu_markup(is_premium=True))
     assert "🛠 Админка" not in buttons
     assert "🛠 Админка" in _button_texts(main_menu_markup(is_admin=True))
     assert "🗑 Удалить игрока" in _button_texts(admin_markup("players"))
@@ -429,6 +433,7 @@ async def test_profile_and_top_texts_include_new_user_fields() -> None:
     assert "alpha_one" in profile
     assert "The First" in profile
     assert "Creator Points" in profile
+    assert "Premium" in profile
     assert "#5" in profile
     assert "alpha_one" in top_text
     assert "77" in top_text
@@ -474,6 +479,22 @@ async def test_show_tops_renders_rating_leaderboard() -> None:
     assert "Топ" in callback.message.text
     assert "alpha_one" in callback.message.text
     assert "Рейтинг" in "".join(sorted(_button_texts(tops_markup("rating"))))
+
+
+@pytest.mark.asyncio
+async def test_show_premium_battle_pass_is_restricted_for_non_premium() -> None:
+    """Premium battle pass screen should show access restriction when needed."""
+
+    services = TelegramServices()
+    callback = CallbackQuery(from_user=User(1), message=Message(text="old"))
+    await show_premium_battle_pass(callback, services, 1)
+
+    assert callback.message.text is not None
+    assert "только для игроков с премиум-статусом" in callback.message.text
+    player = await services.get_or_create_player(1)
+    season = await services.active_premium_battle_pass()
+    assert season is not None
+    assert "Premium Battle Pass" in premium_battle_pass_text(season, player)
 
 
 @pytest.mark.asyncio

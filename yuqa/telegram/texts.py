@@ -151,6 +151,34 @@ def battle_pass_text(season: BattlePassSeason | None, player: Player) -> str:
     )
 
 
+def premium_battle_pass_text(season: BattlePassSeason | None, player: Player) -> str:
+    """Render the current premium battle pass and player progress."""
+
+    if not player.is_premium:
+        return (
+            "💎 <b>Premium Battle Pass</b>\n"
+            "<i>Доступно только для игроков с премиум-статусом.</i>"
+        )
+    points = sum(player.battle_pass_progress)
+    if season is None:
+        return "💎 <b>Premium Battle Pass</b>\n<i>Сезон пока не активен.</i>"
+    unlocked = (
+        ", ".join(
+            str(level.level_number)
+            for level in season.levels
+            if points >= level.required_points
+        )
+        or "—"
+    )
+    return (
+        f"💎 <b>{season.name}</b>\n"
+        f"📅 <b>Период:</b> <code>{season.start_at.date()} → {season.end_at.date()}</code>\n"
+        f"⭐ <b>Твои очки:</b> <code>{points}</code>\n"
+        f"🎁 <b>Открыты уровни:</b> <code>{unlocked}</code>\n\n"
+        "<i>Премиум-ветка Battle Pass доступна только премиум-игрокам. Можно купить следующий уровень за 250 монет.</i>"
+    )
+
+
 def battle_pass_admin_text(season: BattlePassSeason | None) -> str:
     """Render the current admin view for battle pass levels."""
 
@@ -172,12 +200,47 @@ def battle_pass_admin_text(season: BattlePassSeason | None) -> str:
     )
 
 
+def premium_battle_pass_admin_text(season: BattlePassSeason | None) -> str:
+    """Render the current admin view for premium battle pass levels."""
+
+    if season is None:
+        return "💎 <b>Premium Battle Pass</b>\n<i>Активный сезон не найден.</i>"
+    if not season.levels:
+        levels = "<i>Пока уровней нет.</i>"
+    else:
+        levels = "\n".join(
+            f"• <b>Уровень {level.level_number}</b> — <code>{level.required_points}</code> очков, награда: "
+            f"<code>{level.reward.coins}</code>🪙 <code>{level.reward.crystals}</code>💎 <code>{level.reward.orbs}</code>🔮"
+            for level in season.levels
+        )
+    return (
+        f"💎 <b>{season.name}</b>\n"
+        f"📅 <b>Период:</b> <code>{season.start_at.date()} → {season.end_at.date()}</code>\n"
+        f"🎚️ <b>Уровней:</b> <code>{len(season.levels)}</code>\n\n"
+        f"{levels}"
+    )
+
+
 def battle_pass_seasons_text(seasons: list[BattlePassSeason]) -> str:
     """Render the admin battle pass season list."""
 
     if not seasons:
         return "🏁 <b>Battle Pass</b>\n<i>Сезонов пока нет.</i>"
     lines = ["🏁 <b>Battle Pass</b>"]
+    for season in seasons:
+        status = "активен" if season.is_active else "архив"
+        lines.append(
+            f"• <b>{season.name}</b> — <code>{season.start_at.date()} → {season.end_at.date()}</code> · {status}"
+        )
+    return "\n".join(lines)
+
+
+def premium_battle_pass_seasons_text(seasons: list[BattlePassSeason]) -> str:
+    """Render the admin premium battle pass season list."""
+
+    if not seasons:
+        return "💎 <b>Premium Battle Pass</b>\n<i>Сезонов пока нет.</i>"
+    lines = ["💎 <b>Premium Battle Pass</b>"]
     for season in seasons:
         status = "активен" if season.is_active else "архив"
         lines.append(
@@ -230,6 +293,7 @@ def profile_text(
         f"🏆 <b>Рейтинг:</b> <code>{player.rating}</code>\n"
         f"🔥 <b>Победы/Проигрыши/Ничьи:</b> <code>{player.wins}/{player.losses}/{player.draws}</code>\n"
         f"🪄 <b>Creator Points:</b> <code>{player.creator_points}</code>\n"
+        f"💎 <b>Premium:</b> <code>{'yes' if player.is_premium else 'no'}</code>\n"
         f"🏰 <b>Клан:</b> {clan_line}\n"
         f"📚 <b>Коллекция:</b> <code>{player.collection_count}</code>\n\n"
         f"🎨 <b>Активный фон:</b> {_background_label(selected_background)}\n"
@@ -675,6 +739,7 @@ def admin_text(counts: dict[str, int], section: str = "dashboard") -> str:
         "standard_cards": "🆓 <b>Стартовые карты</b>",
         "universes": "🌌 <b>Вселенные</b>",
         "battle_pass": "🏁 <b>Battle Pass</b>",
+        "premium_battle_pass": "💎 <b>Premium Battle Pass</b>",
         "free_rewards": "🎁 <b>Бесплатные награды</b>",
         "ideas_pending": "💡 <b>Идеи на модерации</b>",
         "ideas_public": "📣 <b>Идеи в голосовании</b>",
@@ -692,6 +757,7 @@ def admin_text(counts: dict[str, int], section: str = "dashboard") -> str:
         f"🆓 <b>Стартовых карт:</b> <code>{counts.get('standard_cards', 0)}</code>\n"
         f"🌌 <b>Вселенных:</b> <code>{counts.get('universes', 0)}</code>\n"
         f"🏁 <b>Уровней BP:</b> <code>{counts.get('battle_pass_levels', 0)}</code>\n"
+        f"💎 <b>Уровней Premium BP:</b> <code>{counts.get('premium_battle_pass_levels', 0)}</code>\n"
         f"💡 <b>На модерации:</b> <code>{counts.get('ideas_pending', 0)}</code>\n"
         f"📣 <b>В голосовании:</b> <code>{counts.get('ideas_public', 0)}</code>\n"
         f"📚 <b>В коллекции:</b> <code>{counts.get('ideas_collection', 0)}</code>\n"

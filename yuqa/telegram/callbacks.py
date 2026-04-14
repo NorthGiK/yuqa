@@ -60,6 +60,12 @@ class BattlePassCallback(CallbackData, prefix="bp"):
     action: str
 
 
+class PremiumBattlePassCallback(CallbackData, prefix="pbp"):
+    """Premium battle pass player actions."""
+
+    action: str
+
+
 class DeckCallback(CallbackData, prefix="deck"):
     """Deck constructor callbacks."""
 

@@ -589,7 +589,7 @@ async def test_admin_panel_can_set_title_and_creator_points_by_player_id() -> No
     await start_admin_player_edit(
         Message(from_user=admin, text="/admin"), state, "creator_points"
     )
-    await capture_admin_player_id(Message(from_user=admin, text="2"), state)
+    await capture_admin_player_id(Message(from_user=admin, text="2"), services, state)
     await capture_admin_player_value(
         Message(from_user=admin, text="25"), services, state
     )
@@ -600,13 +600,47 @@ async def test_admin_panel_can_set_title_and_creator_points_by_player_id() -> No
     await start_admin_player_edit(
         Message(from_user=admin, text="/admin"), state, "title"
     )
-    await capture_admin_player_id(Message(from_user=admin, text="2"), state)
+    await capture_admin_player_id(Message(from_user=admin, text="2"), services, state)
     await capture_admin_player_value(
         Message(from_user=admin, text="Champion"), services, state
     )
 
     assert target.title == "Champion"
     assert state.state is None
+
+
+@pytest.mark.asyncio
+async def test_admin_can_toggle_player_premium_by_id() -> None:
+    """Premium flag should be switchable for an existing player."""
+
+    services = TelegramServices()
+    player = await services.get_or_create_player(42)
+    assert player.is_premium is False
+
+    toggled = await services.toggle_player_premium(player.telegram_id)
+    assert toggled.is_premium is True
+
+    updated = await services.set_player_premium(player.telegram_id, False)
+    assert updated.is_premium is False
+
+
+@pytest.mark.asyncio
+async def test_premium_battle_pass_requires_premium_status() -> None:
+    """Only premium players should be able to buy premium battle pass levels."""
+
+    services = TelegramServices()
+    player = await services.get_or_create_player(7)
+    player.wallet.coins = 500
+
+    with pytest.raises(ForbiddenActionError):
+        await services.buy_premium_battle_pass_level(player.telegram_id)
+
+    await services.set_player_premium(player.telegram_id, True)
+    progress, level_number = await services.buy_premium_battle_pass_level(
+        player.telegram_id
+    )
+    assert level_number == 1
+    assert progress.claimed_levels == {1}
 
 
 @pytest.mark.asyncio

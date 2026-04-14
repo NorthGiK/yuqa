@@ -8,6 +8,7 @@ from yuqa.telegram.callbacks import (
     BannerCallback,
     BattleQueueCallback,
     BattlePassCallback,
+    PremiumBattlePassCallback,
     CardCallback,
     ClanCallback,
     DeckCallback,
@@ -35,8 +36,10 @@ MAIN_MENU_BUTTON_ROWS: tuple[tuple[str, ...], ...] = (
     ("🏰 Клан", "🛒 Магазин"),
     ("🎁 Бесплатно", "🎁 Баннеры"),
 )
+_PREMIUM_MENU_BUTTON = "💎 Premium Battle Pass"
 MAIN_MENU_BUTTON_TEXTS = {text for row in MAIN_MENU_BUTTON_ROWS for text in row} | {
-    "🛠 Админка"
+    _PREMIUM_MENU_BUTTON,
+    "🛠 Админка",
 }
 
 
@@ -75,10 +78,14 @@ def _choice_markup(
     return _markup(buttons, (2, 2, 2))
 
 
-def main_menu_markup(*, is_admin: bool = False) -> ReplyKeyboardMarkup:
+def main_menu_markup(
+    *, is_admin: bool = False, is_premium: bool = False
+) -> ReplyKeyboardMarkup:
     """Return the main navigation keyboard."""
 
     rows = list(MAIN_MENU_BUTTON_ROWS)
+    if is_premium:
+        rows.insert(5, (_PREMIUM_MENU_BUTTON,))
     if is_admin:
         rows.append(("🛠 Админка",))
     return _reply_markup(tuple(rows))
@@ -272,6 +279,17 @@ def battle_pass_markup(*, can_buy_level: bool = False) -> InlineKeyboardMarkup:
     if can_buy_level:
         buttons.append(
             ("💰 Купить уровень за 250", BattlePassCallback(action="buy_level"))
+        )
+    return _markup(buttons, (1, 1) if can_buy_level else (1,))
+
+
+def premium_battle_pass_markup(*, can_buy_level: bool = False) -> InlineKeyboardMarkup:
+    """Return a minimal premium battle pass keyboard."""
+
+    buttons = []
+    if can_buy_level:
+        buttons.append(
+            ("💰 Купить уровень за 250", PremiumBattlePassCallback(action="buy_level"))
         )
     return _markup(buttons, (1, 1) if can_buy_level else (1,))
 
@@ -577,11 +595,12 @@ def admin_markup(section: str = "dashboard") -> InlineKeyboardMarkup:
             [
                 ("🪄 Creator Points", AdminCallback(action="players_creator_points")),
                 ("✨ Титул", AdminCallback(action="players_title")),
+                ("💎 Премиум", AdminCallback(action="players_premium_toggle")),
                 ("🗑 Удалить игрока", AdminCallback(action="delete_player")),
                 ("🏠 Панель", AdminCallback(action="section", value="dashboard")),
                 ("⬅️ Назад", MenuCallback(section="home")),
             ],
-            (2, 2, 1),
+            (2, 2, 2),
         )
     if section == "banners":
         return _markup(
@@ -647,6 +666,26 @@ def admin_markup(section: str = "dashboard") -> InlineKeyboardMarkup:
             ],
             (1, 1, 1, 2),
         )
+    if section == "premium_battle_pass":
+        return _markup(
+            [
+                (
+                    "➕ Уровень Premium Pass",
+                    AdminCallback(action="premium_battle_pass_add_level"),
+                ),
+                (
+                    "🆕 Новый премиум-сезон",
+                    AdminCallback(action="premium_battle_pass_create_season"),
+                ),
+                (
+                    "🗑 Удалить премиум-сезон",
+                    AdminCallback(action="premium_battle_pass_delete_season"),
+                ),
+                ("🏠 Панель", AdminCallback(action="section", value="dashboard")),
+                ("⬅️ Назад", MenuCallback(section="home")),
+            ],
+            (1, 1, 1, 2),
+        )
     if section == "free_rewards":
         return _markup(
             [
@@ -677,11 +716,15 @@ def admin_markup(section: str = "dashboard") -> InlineKeyboardMarkup:
                 AdminCallback(action="section", value="standard_cards"),
             ),
             ("🏁 Battle Pass", AdminCallback(action="section", value="battle_pass")),
+            (
+                "💎 Premium Pass",
+                AdminCallback(action="section", value="premium_battle_pass"),
+            ),
             ("🎁 Фри-награды", AdminCallback(action="section", value="free_rewards")),
             ("🌌 Вселенные", AdminCallback(action="section", value="universes")),
             ("⬅️ Назад", MenuCallback(section="home")),
         ],
-        (2, 2, 2, 2, 2),
+        (2, 2, 2, 2, 2, 2),
     )
 
 

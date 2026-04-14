@@ -56,7 +56,9 @@ class PersistentStateStore:
         self.banners = {}
         self.shop_items = {}
         self.battle_pass_seasons = {}
+        self.premium_battle_pass_seasons = {}
         self.battle_pass_progress = {}
+        self.premium_battle_pass_progress = {}
         self.battles = {}
         self.ideas = {}
         self.standard_cards = []
@@ -127,6 +129,7 @@ class PersistentStateStore:
         self.banners = dict(legacy.banners)
         self.shop_items = dict(legacy.shop_items)
         self.battle_pass_seasons = dict(legacy.battle_pass_seasons)
+        self.premium_battle_pass_seasons = dict(legacy.premium_battle_pass_seasons)
         self.ideas = dict(legacy.ideas)
         self.standard_cards = list(legacy.standard_cards)
         self.universes = list(legacy.universes)
@@ -274,10 +277,36 @@ class PersistentBattlePassSeasonRepository(_Repository):
         return list(self.items.values())
 
 
+class PersistentPremiumBattlePassSeasonRepository(_Repository):
+    """Premium battle pass season storage."""
+
+    section = "premium_battle_pass_seasons"
+
+    async def list_active(self):
+        return [season for season in self.items.values() if season.is_active]
+
+    async def list_all(self):
+        return list(self.items.values())
+
+
 class PersistentBattlePassProgressRepository(_Repository):
     """Battle pass progress keyed by player and season."""
 
     section = "battle_pass_progress"
+
+    async def get_for_player(self, player_id, season_id):
+        return self.items.get((player_id, season_id))
+
+    async def save(self, item):
+        self.items[(item.player_id, item.season_id)] = item
+        self.store.save()
+        return item
+
+
+class PersistentPremiumBattlePassProgressRepository(_Repository):
+    """Premium battle pass progress keyed by player and season."""
+
+    section = "premium_battle_pass_progress"
 
     async def get_for_player(self, player_id, season_id):
         return self.items.get((player_id, season_id))

@@ -25,6 +25,7 @@ def create_sync_engine(database_url: str):
     engine = create_engine(database_url, future=True, pool_pre_ping=True)
 
     if database_url.startswith("sqlite"):
+
         @event.listens_for(engine, "connect")
         def _configure_sqlite(dbapi_connection, _connection_record) -> None:
             cursor = dbapi_connection.cursor()

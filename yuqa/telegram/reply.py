@@ -64,11 +64,7 @@ async def send_or_edit(
 ) -> Message | None:
     """Send a new message or update the current callback message."""
 
-    if (
-        getattr(event, "message", None) is not None
-        and
-        hasattr(event, "answer")
-    ):
+    if getattr(event, "message", None) is not None and hasattr(event, "answer"):
         await safe_edit(event.message, text, reply_markup)
         return await event.answer()
 

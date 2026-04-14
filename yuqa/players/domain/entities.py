@@ -2,6 +2,7 @@
 
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
+import random
 
 from yuqa.shared.enums import ProfileBackgroundRarity
 from yuqa.shared.value_objects.image_ref import ImageRef
@@ -16,6 +17,7 @@ class Player:
     telegram_id: int
     rating: int = 0
     is_banned: bool = False
+    is_premium: bool = False
     created_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
     wins: int = 0
     losses: int = 0
@@ -37,19 +39,19 @@ class Player:
         """Increase wins and rating."""
 
         self.wins += 1
-        self.rating += 30
+        self.rating += 30 + random.randint(0, 5) 
 
     def add_loss(self) -> None:
         """Increase losses and lower rating a bit."""
 
         self.losses += 1
-        self.rating = max(0, self.rating - 10)
+        self.rating = max(0, self.rating - 35 - random.randint(0, 5))
 
     def add_draw(self) -> None:
         """Increase draws and reward a small rating boost."""
 
         self.draws += 1
-        self.rating += 5
+        self.rating -= random.randint(0, 5)
 
     def owns_profile_background(self, background_id: int) -> bool:
         """Return True when the player owns the background."""

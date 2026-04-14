@@ -13,6 +13,7 @@ dependencies = [
   "python-dotenv>=1.0",
   "alembic>=1.18.4",
   "psycopg2>=2.9.11",
+  "nuitka>=4.0.8",
 ]
 
 [project.optional-dependencies]

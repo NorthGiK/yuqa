@@ -19,8 +19,18 @@ def test_banner_roll_and_availability():
         cost_resource=ResourceType.SILVER_TICKETS,
         date_range=DateRange(now - timedelta(days=1), now + timedelta(days=1)),
         pools=[
-            BannerReward(reward_type=RewardType.RESOURCE, resource_type=ResourceType.COINS, quantity=100, weight=10),
-            BannerReward(reward_type=RewardType.CARD, card_template_id=1, rarity=Rarity.EPIC, weight=1),
+            BannerReward(
+                reward_type=RewardType.RESOURCE,
+                resource_type=ResourceType.COINS,
+                quantity=100,
+                weight=10,
+            ),
+            BannerReward(
+                reward_type=RewardType.CARD,
+                card_template_id=1,
+                rarity=Rarity.EPIC,
+                weight=1,
+            ),
         ],
     )
     player = Player(telegram_id=1, wallet=ResourceWallet(silver_tickets=10))

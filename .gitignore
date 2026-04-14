@@ -8,6 +8,13 @@ __pycache__/
 uv.lock
 yuqa.egg-info/
 .venv/
+main.build/
+# script that the execute binary file
+main.sh
+# binary file of app for Linux 🫶
+main.bin
+# binary file of app for Windows 👎️
+main.exe
 
 # Secrets and data
 data/

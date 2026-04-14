@@ -339,7 +339,9 @@ async def show_home(event, services, player_id: int, *, is_admin: bool = False):
                 menu_text(player), reply_markup=main_menu_markup(is_admin=is_admin)
             )
         return await event.answer()
-    await event.answer(menu_text(player), reply_markup=main_menu_markup(is_admin=is_admin))
+    await event.answer(
+        menu_text(player), reply_markup=main_menu_markup(is_admin=is_admin)
+    )
 
 
 async def show_profile(
@@ -383,7 +385,9 @@ async def show_profile(
 async def show_cards(event, services, player_id: int, page: int = 1):
     """Show the card collection."""
 
-    cards = sorted(await services.list_player_cards(player_id), key=lambda card: card.id)
+    cards = sorted(
+        await services.list_player_cards(player_id), key=lambda card: card.id
+    )
     page_cards, page, has_prev, has_next, total_pages = _paginate_items(cards, page)
     await send_or_edit(
         event,
@@ -516,11 +520,8 @@ async def show_idea_detail(
     idea = await services.get_idea(idea_id)
     if scope == "published" and idea.status != IdeaStatus.PUBLISHED:
         raise ValidationError("idea is not on the public ideas page")
-    if (
-        scope == "collection"
-        and (
-            idea.status != IdeaStatus.COLLECTED or idea.player_id != player_id
-        )
+    if scope == "collection" and (
+        idea.status != IdeaStatus.COLLECTED or idea.player_id != player_id
     ):
         raise ValidationError("idea is not in your collection")
     author = await services.idea_author(idea)
@@ -767,9 +768,7 @@ async def show_admin(
             "ideas_collection": IdeaStatus.COLLECTED,
             "ideas_rejected": IdeaStatus.REJECTED,
         }[section]
-        ideas, has_prev, has_next = await services.list_ideas(
-            status=status, page=page
-        )
+        ideas, has_prev, has_next = await services.list_ideas(status=status, page=page)
         text, markup = (
             admin_text(counts, section)
             + "\n\n"
@@ -940,9 +939,7 @@ async def capture_battle_pass_season_end_at(
     if end_at is None:
         return await message.answer("Введи дату финиша в ISO-формате 🙂")
     try:
-        await services.create_battle_pass_season(
-            data["name"], data["start_at"], end_at
-        )
+        await services.create_battle_pass_season(data["name"], data["start_at"], end_at)
     except (DomainError, ValidationError, KeyError, ValueError) as error:
         await state.clear()
         return await message.answer(f"❌ {error}")
@@ -1795,7 +1792,9 @@ def build_router(services, settings) -> Router:
         if text == "🎴 Коллекция":
             return await show_cards(message, services, message.from_user.id)
         if text == "🖼 Фоны профиля":
-            return await show_profile_backgrounds(message, services, message.from_user.id)
+            return await show_profile_backgrounds(
+                message, services, message.from_user.id
+            )
         if text == "📖 Галерея":
             return await show_gallery(message, services)
         if text == "💡 Идеи":
@@ -2030,7 +2029,10 @@ def build_router(services, settings) -> Router:
                         callback, services, max(callback_data.page, 1)
                     )
                 return await show_cards(
-                    callback, services, callback.from_user.id, max(callback_data.page, 1)
+                    callback,
+                    services,
+                    callback.from_user.id,
+                    max(callback_data.page, 1),
                 )
             if callback_data.action == "open":
                 if callback_data.scope == "gallery":
@@ -2149,9 +2151,7 @@ def build_router(services, settings) -> Router:
             return await callback.answer()
         if callback_data.action == "create":
             await state.set_state(ClanCreation.name)
-            return await send_notice(
-                callback, "Напиши /clan_create, чтобы начать 🌟"
-            )
+            return await send_notice(callback, "Напиши /clan_create, чтобы начать 🌟")
         if callback_data.action == "leave":
             try:
                 await services.leave_clan(callback.from_user.id)

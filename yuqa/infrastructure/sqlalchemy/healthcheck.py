@@ -12,6 +12,7 @@ from yuqa.infrastructure.sqlalchemy.repositories import create_sync_engine
 
 load_dotenv()
 
+
 def _default_database_url() -> str:
     """Return the same default database URL as runtime settings."""
 

@@ -2,7 +2,14 @@
 
 import pytest
 
-from yuqa.shared.enums import BattleActionType, CardForm, Rarity, ResourceType, RewardType, Universe
+from yuqa.shared.enums import (
+    BattleActionType,
+    CardForm,
+    Rarity,
+    ResourceType,
+    RewardType,
+    Universe,
+)
 from yuqa.shared.errors import NotEnoughResourcesError, ValidationError
 from yuqa.shared.value_objects.deck_slots import DeckSlots
 from yuqa.shared.value_objects.date_range import DateRange

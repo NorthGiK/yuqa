@@ -19,10 +19,20 @@ from yuqa.telegram.services import TelegramServices
 
 def test_quest_completion_and_reset():
     player = Player(telegram_id=1)
-    quest = QuestDefinition(id=1, period=QuestPeriod.DAILY, action_type=QuestActionType.BATTLE_WIN, reward=QuestReward(coins=50, battle_pass_points=20))
+    quest = QuestDefinition(
+        id=1,
+        period=QuestPeriod.DAILY,
+        action_type=QuestActionType.BATTLE_WIN,
+        reward=QuestReward(coins=50, battle_pass_points=20),
+    )
     progress = QuestProgress(player_id=1, quest_id=1)
     reward = QuestService().complete(player, quest, progress)
-    assert progress.completed and player.wallet.coins == 50 and player.battle_pass_progress == [20] and reward.coins == 50
+    assert (
+        progress.completed
+        and player.wallet.coins == 50
+        and player.battle_pass_progress == [20]
+        and reward.coins == 50
+    )
     QuestResetService().reset_daily([progress])
     assert not progress.completed
 

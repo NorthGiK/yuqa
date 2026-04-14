@@ -35,9 +35,9 @@ MAIN_MENU_BUTTON_ROWS: tuple[tuple[str, ...], ...] = (
     ("🏰 Клан", "🛒 Магазин"),
     ("🎁 Бесплатно", "🎁 Баннеры"),
 )
-MAIN_MENU_BUTTON_TEXTS = {
-    text for row in MAIN_MENU_BUTTON_ROWS for text in row
-} | {"🛠 Админка"}
+MAIN_MENU_BUTTON_TEXTS = {text for row in MAIN_MENU_BUTTON_ROWS for text in row} | {
+    "🛠 Админка"
+}
 
 
 def _markup(buttons, sizes):
@@ -109,9 +109,13 @@ def cards_markup(
         for card in cards
     ]
     if has_prev:
-        buttons.append(("⬅️", CardCallback(action="page", page=page - 1, scope="collection")))
+        buttons.append(
+            ("⬅️", CardCallback(action="page", page=page - 1, scope="collection"))
+        )
     if has_next:
-        buttons.append(("➡️", CardCallback(action="page", page=page + 1, scope="collection")))
+        buttons.append(
+            ("➡️", CardCallback(action="page", page=page + 1, scope="collection"))
+        )
     sizes = [1] * len(cards)
     if has_prev or has_next:
         sizes.append(2 if has_prev and has_next else 1)
@@ -140,9 +144,13 @@ def gallery_markup(
         for template in templates
     ]
     if has_prev:
-        buttons.append(("⬅️", CardCallback(action="page", page=page - 1, scope="gallery")))
+        buttons.append(
+            ("⬅️", CardCallback(action="page", page=page - 1, scope="gallery"))
+        )
     if has_next:
-        buttons.append(("➡️", CardCallback(action="page", page=page + 1, scope="gallery")))
+        buttons.append(
+            ("➡️", CardCallback(action="page", page=page + 1, scope="gallery"))
+        )
     sizes = [1] * len(templates)
     if has_prev or has_next:
         sizes.append(2 if has_prev and has_next else 1)
@@ -353,16 +361,14 @@ def ideas_markup(
     ]
     nav = []
     if has_prev:
-        nav.append(
-            ("⬅️", IdeaCallback(action="page", page=page - 1, scope=scope))
-        )
+        nav.append(("⬅️", IdeaCallback(action="page", page=page - 1, scope=scope)))
     if has_next:
-        nav.append(
-            ("➡️", IdeaCallback(action="page", page=page + 1, scope=scope))
-        )
+        nav.append(("➡️", IdeaCallback(action="page", page=page + 1, scope=scope)))
     buttons.extend(nav)
     if not collection:
-        buttons.append(("➕ Предложить идею", IdeaCallback(action="propose", page=page)))
+        buttons.append(
+            ("➕ Предложить идею", IdeaCallback(action="propose", page=page))
+        )
     sizes = [1] * len(ideas)
     if nav:
         sizes.append(len(nav))
@@ -440,13 +446,9 @@ def admin_ideas_markup(
     )
     nav = []
     if has_prev:
-        nav.append(
-            ("⬅️", IdeaCallback(action="admin_list", page=page - 1, scope=scope))
-        )
+        nav.append(("⬅️", IdeaCallback(action="admin_list", page=page - 1, scope=scope)))
     if has_next:
-        nav.append(
-            ("➡️", IdeaCallback(action="admin_list", page=page + 1, scope=scope))
-        )
+        nav.append(("➡️", IdeaCallback(action="admin_list", page=page + 1, scope=scope)))
     buttons.extend(nav)
     buttons.append(("🏠 Панель", AdminCallback(action="section", value="dashboard")))
     buttons.append(("⬅️ В меню", MenuCallback(section="home")))

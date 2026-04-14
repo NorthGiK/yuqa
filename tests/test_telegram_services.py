@@ -19,7 +19,11 @@ from yuqa.shared.enums import (
     ResourceType,
     Universe,
 )
-from yuqa.shared.errors import EntityNotFoundError, ForbiddenActionError, ValidationError
+from yuqa.shared.errors import (
+    EntityNotFoundError,
+    ForbiddenActionError,
+    ValidationError,
+)
 from yuqa.shared.value_objects.date_range import DateRange
 from yuqa.shared.value_objects.deck_slots import DeckSlots
 from yuqa.shared.value_objects.image_ref import ImageRef
@@ -130,7 +134,9 @@ async def test_admin_player_delete_flow_removes_related_state() -> None:
     await start_admin_player_delete(Message(from_user=admin, text="/admin"), state)
     assert state.state is not None
 
-    await capture_admin_player_delete(Message(from_user=admin, text="1"), services, state)
+    await capture_admin_player_delete(
+        Message(from_user=admin, text="1"), services, state
+    )
 
     assert state.state is None
     assert await services.get_player(1) is None
@@ -156,7 +162,9 @@ async def test_admin_player_delete_rejects_missing_player() -> None:
         await services.delete_player(99)
 
     await start_admin_player_delete(Message(from_user=admin, text="/admin"), state)
-    await capture_admin_player_delete(Message(from_user=admin, text="99"), services, state)
+    await capture_admin_player_delete(
+        Message(from_user=admin, text="99"), services, state
+    )
 
     assert state.state is None
     assert await services.get_player(99) is None

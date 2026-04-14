@@ -35,6 +35,13 @@ lint:
 format:
 	uv run ruff format yuqa tests main.py
 
+build:
+	uv run nuitka main.py
+
+# run binary file only on linux
+brun:
+	bash main.sh
+
 db-upgrade:
 	uv run alembic upgrade head
 

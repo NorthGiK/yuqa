@@ -7,7 +7,9 @@ import pytest
 from yuqa.telegram.config import Settings
 
 
-def test_settings_from_env_reads_values(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+def test_settings_from_env_reads_values(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
     """Settings should parse token, admins, and content path from env vars."""
 
     monkeypatch.setenv("BOT_TOKEN", "token-123")
@@ -21,7 +23,10 @@ def test_settings_from_env_reads_values(monkeypatch: pytest.MonkeyPatch, tmp_pat
     assert settings.token == "token-123"
     assert settings.admin_ids == {1, 2, 3}
     assert settings.content_dir == tmp_path
-    assert settings.database_url == f"sqlite:///{(tmp_path / 'yuqa.db').resolve().as_posix()}"
+    assert (
+        settings.database_url
+        == f"sqlite:///{(tmp_path / 'yuqa.db').resolve().as_posix()}"
+    )
     assert settings.auto_migrate is False
 
 

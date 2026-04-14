@@ -382,8 +382,7 @@ def _idea_from_dict(data: dict) -> Idea:
         title=data["title"],
         description=data["description"],
         status=IdeaStatus(data.get("status", IdeaStatus.PENDING.value)),
-        created_at=_parse_dt(data.get("created_at"))
-        or datetime.now(timezone.utc),
+        created_at=_parse_dt(data.get("created_at")) or datetime.now(timezone.utc),
         votes={
             int(player_id): int(value)
             for player_id, value in data.get("votes", {}).items()

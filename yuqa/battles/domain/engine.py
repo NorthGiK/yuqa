@@ -196,7 +196,9 @@ class BattleEngine:
             raise BattleRuleViolationError("ability can only be used by active card")
         ability = active.template.ability_for(active.form)
         if ability.cost > ap_cost:
-            raise BattleRuleViolationError("Не достаточно Очков Действия для способности")
+            raise BattleRuleViolationError(
+                "Не достаточно Очков Действия для способности"
+            )
         for effect in ability.effects:
             self._apply_effect(battle, player_id, effect, log)
 

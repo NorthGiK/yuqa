@@ -433,13 +433,13 @@ def ideas_text(
         return f"{title}\n<i>{empty_text}</i>"
     lines = [title, f"📄 <b>Страница:</b> <code>{page}</code>", ""]
     for idea in ideas:
-        lines.append(
-            f"• <b>{escape(idea.title)}</b> — 👍 <code>{idea.upvotes}</code>"
-        )
+        lines.append(f"• <b>{escape(idea.title)}</b> — 👍 <code>{idea.upvotes}</code>")
     return "\n".join(lines)
 
 
-def idea_text(idea: Idea, author: Player | None, *, viewer_vote: int | None = None) -> str:
+def idea_text(
+    idea: Idea, author: Player | None, *, viewer_vote: int | None = None
+) -> str:
     """Render one idea with author, body, and vote counters."""
 
     lines = [

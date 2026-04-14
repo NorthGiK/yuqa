@@ -61,7 +61,6 @@ class CardTemplate:
     ascended_ability: Ability | None = None
     is_available: bool = True
 
-
     def universe_value(self) -> str:
         """Return the universe as a plain string for presentation and storage."""
 

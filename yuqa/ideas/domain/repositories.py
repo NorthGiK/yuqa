@@ -1,4 +1,3 @@
-
 from typing import Protocol
 
 from yuqa.ideas.domain.entities import Idea

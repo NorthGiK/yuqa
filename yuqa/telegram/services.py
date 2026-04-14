@@ -140,9 +140,7 @@ class TelegramServices:
         database_url: str | None = None,
     ) -> None:
         self.store = (
-            PersistentStateStore(database_url, content_path)
-            if database_url
-            else None
+            PersistentStateStore(database_url, content_path) if database_url else None
         )
         self.catalog = (
             self.store
@@ -374,8 +372,12 @@ class TelegramServices:
     async def list_battle_pass_seasons(self) -> list[BattlePassSeason]:
         """Return every stored battle pass season sorted by dates."""
 
-        seasons: list[BattlePassSeason] = list(getattr(self.battle_pass_seasons, "items", {}).values())
-        return sorted(seasons, key=lambda season: (season.start_at, season.id), reverse=True)
+        seasons: list[BattlePassSeason] = list(
+            getattr(self.battle_pass_seasons, "items", {}).values()
+        )
+        return sorted(
+            seasons, key=lambda season: (season.start_at, season.id), reverse=True
+        )
 
     async def create_battle_pass_season(
         self,
@@ -392,7 +394,9 @@ class TelegramServices:
         seasons = await self.list_battle_pass_seasons()
         for season in seasons:
             if start_at <= season.end_at and end_at >= season.start_at:
-                raise ForbiddenActionError("battle pass dates overlap with an existing season")
+                raise ForbiddenActionError(
+                    "battle pass dates overlap with an existing season"
+                )
         season = BattlePassSeason(
             id=_next_id(getattr(self.battle_pass_seasons, "items", {})),
             name=name.strip(),
@@ -612,7 +616,8 @@ class TelegramServices:
         ideas = [
             idea
             for idea in await self.ideas.list_all()
-            if idea.status == status and (player_id is None or idea.player_id == player_id)
+            if idea.status == status
+            and (player_id is None or idea.player_id == player_id)
         ]
         ideas = self._sort_ideas(ideas)
         start = (page - 1) * page_size
@@ -630,7 +635,9 @@ class TelegramServices:
         idea = await self.get_idea(idea_id)
         return idea.vote_of(telegram_id)
 
-    async def vote_for_idea(self, telegram_id: int, idea_id: int, direction: int) -> Idea:
+    async def vote_for_idea(
+        self, telegram_id: int, idea_id: int, direction: int
+    ) -> Idea:
         """Cast one upvote or downvote for a published idea."""
 
         await self.get_or_create_player(telegram_id)
@@ -1330,7 +1337,9 @@ class TelegramServices:
             await self.battle_pass_progress.save(progress)
         return progress
 
-    async def buy_battle_pass_level(self, telegram_id: int) -> tuple[BattlePassProgress, int]:
+    async def buy_battle_pass_level(
+        self, telegram_id: int
+    ) -> tuple[BattlePassProgress, int]:
         """Buy the next unclaimed battle pass level for 250 coins."""
 
         season = await self.active_battle_pass()
@@ -1339,7 +1348,11 @@ class TelegramServices:
         player = await self.get_or_create_player(telegram_id)
         progress = await self.active_battle_pass_progress(telegram_id)
         next_level = next(
-            (level for level in season.levels if level.level_number not in progress.claimed_levels),
+            (
+                level
+                for level in season.levels
+                if level.level_number not in progress.claimed_levels
+            ),
             None,
         )
         if next_level is None:

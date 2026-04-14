@@ -1,6 +1,13 @@
 """Factory helpers for the Telegram bot runtime."""
 
-from yuqa.telegram.compat import BaseMiddleware, Bot, DefaultBotProperties, Dispatcher, MemoryStorage, ParseMode
+from yuqa.telegram.compat import (
+    BaseMiddleware,
+    Bot,
+    DefaultBotProperties,
+    Dispatcher,
+    MemoryStorage,
+    ParseMode,
+)
 from yuqa.telegram.router import build_router
 
 
@@ -11,9 +18,15 @@ class ActionRecorderMiddleware(BaseMiddleware):
         self.services = services
 
     async def __call__(self, handler, event, data):
-        user = getattr(event, "from_user", None) or getattr(getattr(event, "message", None), "from_user", None)
+        user = getattr(event, "from_user", None) or getattr(
+            getattr(event, "message", None), "from_user", None
+        )
         if user is not None and hasattr(self.services, "record_action"):
-            action = getattr(event, "data", None) or getattr(event, "text", None) or type(event).__name__.lower()
+            action = (
+                getattr(event, "data", None)
+                or getattr(event, "text", None)
+                or type(event).__name__.lower()
+            )
             await self.services.record_action(user.id, str(action))
         return await handler(event, data)
 

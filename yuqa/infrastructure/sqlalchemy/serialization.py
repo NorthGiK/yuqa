@@ -15,7 +15,6 @@ from yuqa.battles.domain.entities import (
 )
 from yuqa.cards.domain.entities import PlayerCard
 from yuqa.clans.domain.entities import Clan
-from yuqa.ideas.domain.entities import Idea
 from yuqa.infrastructure.local import (
     _banner_from_dict,
     _banner_to_dict,
@@ -65,10 +64,7 @@ def _mapping_codec(
 
     def load(payload: Any) -> dict[Any, Any]:
         data = payload or {}
-        return {
-            load_key(key): load_item(value)
-            for key, value in dict(data).items()
-        }
+        return {load_key(key): load_item(value) for key, value in dict(data).items()}
 
     return SectionCodec(dump=dump, load=load)
 
@@ -125,7 +121,9 @@ def _player_to_dict(player: Player) -> dict[str, Any]:
         },
         "collection_count": player.collection_count,
         "battle_deck": (
-            list(player.battle_deck.card_ids) if player.battle_deck is not None else None
+            list(player.battle_deck.card_ids)
+            if player.battle_deck is not None
+            else None
         ),
         "battle_pass_progress": list(player.battle_pass_progress),
         "clan_id": player.clan_id,
@@ -170,9 +168,7 @@ def _player_from_dict(data: dict[str, Any]) -> Player:
         nickname=data.get("nickname"),
         title=data.get("title"),
         creator_points=data.get("creator_points", 0),
-        owned_profile_background_ids=list(
-            data.get("owned_profile_background_ids", [])
-        ),
+        owned_profile_background_ids=list(data.get("owned_profile_background_ids", [])),
         selected_profile_background_id=data.get("selected_profile_background_id"),
     )
 
@@ -294,8 +290,7 @@ def _battle_card_state_from_dict(data: dict[str, Any]) -> BattleCardState:
         defense=data["defense"],
         alive=data.get("alive", True),
         effect_modifiers=[
-            _stat_modifier_from_dict(item)
-            for item in data.get("effect_modifiers", [])
+            _stat_modifier_from_dict(item) for item in data.get("effect_modifiers", [])
         ],
     )
 
@@ -307,8 +302,7 @@ def _battle_side_to_dict(side: BattleSide) -> dict[str, Any]:
         "player_id": side.player_id,
         "active_card_id": side.active_card_id,
         "cards": [
-            _battle_card_state_to_dict(card)
-            for _, card in sorted(side.cards.items())
+            _battle_card_state_to_dict(card) for _, card in sorted(side.cards.items())
         ],
     }
 
@@ -316,9 +310,7 @@ def _battle_side_to_dict(side: BattleSide) -> dict[str, Any]:
 def _battle_side_from_dict(data: dict[str, Any]) -> BattleSide:
     """Deserialize a battle side."""
 
-    cards = [
-        _battle_card_state_from_dict(item) for item in data.get("cards", [])
-    ]
+    cards = [_battle_card_state_from_dict(item) for item in data.get("cards", [])]
     return BattleSide(
         player_id=data["player_id"],
         cards={card.player_card_id: card for card in cards},
@@ -446,8 +438,7 @@ def _action_events_codec() -> SectionCodec:
 
     def dump(events: list[tuple[int, str]]) -> list[dict[str, Any]]:
         return [
-            {"player_id": player_id, "action": action}
-            for player_id, action in events
+            {"player_id": player_id, "action": action} for player_id, action in events
         ]
 
     def load(payload: Any) -> list[tuple[int, str]]:

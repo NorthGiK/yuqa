@@ -277,7 +277,9 @@ async def test_show_card_detail_opens_from_collection_and_gallery() -> None:
     collection_callback = CallbackQuery(from_user=User(1), message=Message(text="old"))
     gallery_callback = CallbackQuery(from_user=User(1), message=Message(text="old"))
 
-    await show_card_detail(collection_callback, services, 7, 1, page=1, scope="collection")
+    await show_card_detail(
+        collection_callback, services, 7, 1, page=1, scope="collection"
+    )
     await show_card_detail(gallery_callback, services, 1, 1, page=1, scope="gallery")
 
     assert collection_callback.message.answered_photo == "reina-file-id"

@@ -6,6 +6,7 @@ from yuqa.shared.enums import IdeaStatus
 from yuqa.telegram.callbacks import (
     AdminCallback,
     BannerCallback,
+    BattleCallback,
     BattleQueueCallback,
     BattlePassCallback,
     PremiumBattlePassCallback,
@@ -27,14 +28,15 @@ from yuqa.telegram.compat import (
 )
 
 _CARD_PAGE_SIZE = 10
+_PREMIUM_MENU_BUTTON = "💎 Premium Battle Pass"
+COLLECTION_MENU_BUTTON = "🐦‍🔥 Коллекция"
 MAIN_MENU_BUTTON_ROWS: tuple[tuple[str, ...], ...] = (
-    ("👤 Профиль", "🐦‍🔥 Коллекция"),
+    ("👤 Профиль", COLLECTION_MENU_BUTTON),
     ("📖 Галерея", "💡 Идеи"),
     ("🏆 Топы", "⚔️ Бой"),
-    ("🏁 Battle Pass", "🏰 Клан"),
     ("🛒 Магазин", "🎁 Баннеры"),
+    ("🏁 Battle Pass", "🏰 Клан"),
 )
-_PREMIUM_MENU_BUTTON = "💎 Premium Battle Pass"
 MAIN_MENU_BUTTON_TEXTS = {text for row in MAIN_MENU_BUTTON_ROWS for text in row} | {
     _PREMIUM_MENU_BUTTON,
     "🛠 Админка",
@@ -61,7 +63,7 @@ def _reply_markup(rows: tuple[tuple[str, ...], ...]) -> ReplyKeyboardMarkup:
         for text in row:
             builder.button(text=text)
     builder.adjust(*(len(row) for row in rows))
-    return builder.as_markup()
+    return builder.as_markup(resize_keyboard=True)
 
 
 def _choice_markup(
@@ -101,6 +103,48 @@ def battle_markup(searching: bool = False) -> InlineKeyboardMarkup:
         ],
         (1, 1),
     )
+
+
+def battle_actions_markup(
+    *, can_switch: bool, ability_cost: int, can_use_ability: bool = True
+) -> InlineKeyboardMarkup:
+    """Return the battle round action keyboard."""
+
+    buttons = [
+        ("⚔️Атака", BattleCallback(action="attack")),
+        ("🛡️Блок", BattleCallback(action="block")),
+        ("🌟Бонус", BattleCallback(action="bonus")),
+    ]
+    if can_switch:
+        buttons.append(("🦹‍♂️Сменить карту", BattleCallback(action="switch")))
+    if can_use_ability:
+        buttons.append(
+            (f"🔥Способность {ability_cost}", BattleCallback(action="ability"))
+        )
+    if len(buttons) == 1:
+        sizes = (1,)
+    elif len(buttons) == 2:
+        sizes = (2,)
+    elif len(buttons) == 3:
+        sizes = (2, 1)
+    elif len(buttons) == 4:
+        sizes = (2, 2)
+    else:
+        sizes = (2, 2, 1)
+    return _markup(buttons, sizes)
+
+
+def battle_switch_markup(
+    cards: list[tuple[int, str]], *, back_action: str = "back"
+) -> InlineKeyboardMarkup:
+    """Return the card picker for a battle switch action."""
+
+    buttons = [
+        (label, BattleCallback(action="switch_choose", card_id=card_id))
+        for card_id, label in cards
+    ]
+    buttons.append(("⬅️ Назад", BattleCallback(action=back_action)))
+    return _markup(buttons, (1,) * len(buttons))
 
 
 def cards_markup(

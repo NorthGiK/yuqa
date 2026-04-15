@@ -84,19 +84,17 @@ class BattleEngine:
         spent_ap = 0
         used_ability = False
         switched = False
-        bonus_ap = 0
         for action in actions:
             if action.ap_cost < 0 or action.ap_cost > 5:
                 raise ValidationError("ap_cost must be between 0 and 5")
             if (
                 spent_ap + action.ap_cost
-                > self._round_ap(battle.current_round) + bonus_ap
+                > self._round_ap(battle.current_round)
             ):
                 raise BattleRuleViolationError("cannot spend more AP than available")
             if action.action_type == BattleActionType.BONUS:
-                bonus_ap += max(0, action.power_spent)
                 spent_ap += action.ap_cost
-                log.append(f"player {player_id} gains {bonus_ap} bonus AP")
+                log.append(f"player {player_id} uses bonus")
                 continue
             if action.action_type == BattleActionType.SWITCH_CARD:
                 if switched:

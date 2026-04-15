@@ -5,7 +5,12 @@ from datetime import datetime, timezone
 
 from yuqa.cards.domain.entities import Ability, AbilityEffect
 from yuqa.quests.domain.entities import QuestReward
-from yuqa.shared.errors import DomainError, EntityNotFoundError, ValidationError
+from yuqa.shared.errors import (
+    BattleRuleViolationError,
+    DomainError,
+    EntityNotFoundError,
+    ValidationError,
+)
 from yuqa.shared.enums import (
     AbilityStat,
     AbilityTarget,
@@ -20,6 +25,7 @@ from yuqa.shared.value_objects.stat_block import StatBlock
 from yuqa.telegram.callbacks import (
     AdminCallback,
     BannerCallback,
+    BattleCallback,
     BattleQueueCallback,
     BattlePassCallback,
     PremiumBattlePassCallback,
@@ -110,6 +116,7 @@ from yuqa.telegram.texts import (
     profile_background_wizard_text,
     profile_backgrounds_text,
     profile_text,
+    battle_status_text,
     shop_text,
     shop_wizard_text,
     standard_cards_text,
@@ -125,8 +132,11 @@ from yuqa.telegram.ui import (
     admin_wizard_markup,
     banner_markup,
     battle_markup,
+    battle_actions_markup,
+    battle_switch_markup,
     battle_pass_markup,
     collection_markup,
+    COLLECTION_MENU_BUTTON,
     premium_battle_pass_markup,
     card_level_up_confirm_markup,
     card_markup,
@@ -319,7 +329,6 @@ def _admin_idea_scope_to_section(scope: str) -> str:
 
 def _media_from_message(message: Message) -> tuple[str | None, str]:
     """Return a Telegram file id or URL together with a best-effort content type."""
-
     photo = getattr(message, "photo", None) or []
     if photo:
         return getattr(photo[-1], "file_id", None), "image/jpeg"
@@ -616,9 +625,98 @@ async def show_banners(event, services):
     )
 
 
+def _battle_switch_cards(battle, player_id: int) -> list[tuple[int, str]]:
+    """Build the alive card list for the battle switch picker."""
+
+    side = battle.side_for(player_id)
+    cards: list[tuple[int, str]] = []
+    for card in side.cards.values():
+        if not card.alive:
+            continue
+        active = "✅ " if card.player_card_id == side.active_card_id else ""
+        cards.append(
+            (
+                card.player_card_id,
+                f"{active}{escape(card.template.name)} |♥️{card.current_health}| "
+                f"|⚔️{card.damage}| |🛡️{card.defense}|",
+            )
+        )
+    return cards
+
+
+async def show_battle_round(
+    event,
+    services,
+    player_id: int,
+    *,
+    battle=None,
+    prefix: str | None = None,
+):
+    """Show the battle round status screen."""
+
+    battle = battle or await services.get_active_battle(player_id)
+    if battle is None:
+        return await show_battle(event, services, player_id)
+    summary = services.battle_round_summary(battle, player_id)
+    text = battle_status_text(
+        battle,
+        player_id,
+        opponent_action_points=summary.opponent_action_points,
+        available_action_points=summary.available_action_points,
+        attack_count=summary.attack_count,
+        block_count=summary.block_count,
+        bonus_count=summary.bonus_count,
+        ability_used=summary.ability_used,
+    )
+    if prefix is not None:
+        text = prefix + "\n\n" + text
+    markup = None
+    if battle.status.value == "active" and summary.available_action_points > 0:
+        markup = battle_actions_markup(
+            can_switch=summary.can_switch,
+            ability_cost=summary.ability_cost,
+            can_use_ability=(
+                not summary.ability_used
+                and summary.available_action_points >= summary.ability_cost
+            ),
+        )
+    await send_or_edit(event, text, markup)
+
+
+async def show_battle_switch(event, services, player_id: int):
+    """Show the battle switch picker for alive cards."""
+
+    battle = await services.get_active_battle(player_id)
+    if battle is None:
+        return await show_battle(event, services, player_id)
+    cards = _battle_switch_cards(battle, player_id)
+    if not cards:
+        return await show_battle_round(event, services, player_id, battle=battle)
+    summary = services.battle_round_summary(battle, player_id)
+    if battle.status.value != "active":
+        return await show_battle_round(event, services, player_id, battle=battle)
+    await send_or_edit(
+        event,
+        battle_status_text(
+            battle,
+            player_id,
+            opponent_action_points=summary.opponent_action_points,
+            available_action_points=summary.available_action_points,
+            attack_count=summary.attack_count,
+            block_count=summary.block_count,
+            bonus_count=summary.bonus_count,
+            ability_used=summary.ability_used,
+        ),
+        battle_switch_markup(cards),
+    )
+
+
 async def show_battle(event, services, player_id: int):
     """Show the battle lobby with matchmaking state."""
 
+    battle = await services.get_active_battle(player_id)
+    if battle is not None:
+        return await show_battle_round(event, services, player_id, battle=battle)
     player = await services.get_or_create_player(player_id)
     await send_or_edit(
         event,
@@ -1799,7 +1897,29 @@ async def start_battle(message: Message, services, command: CommandObject):
         return await message.answer(f"❌ {error}")
     except (DomainError, ValidationError) as error:
         return await send_alert(message, f"⛔️ {error}")
-    await message.answer(battle_started_text(battle), reply_markup=battle_markup())
+    summary = services.battle_round_summary(battle, message.from_user.id)
+    await message.answer(
+        battle_started_text(battle)
+        + "\n"
+        + battle_status_text(
+            battle,
+            message.from_user.id,
+            opponent_action_points=summary.opponent_action_points,
+            available_action_points=summary.available_action_points,
+            attack_count=summary.attack_count,
+            block_count=summary.block_count,
+            bonus_count=summary.bonus_count,
+            ability_used=summary.ability_used,
+        ),
+        reply_markup=battle_actions_markup(
+            can_switch=summary.can_switch,
+            ability_cost=summary.ability_cost,
+            can_use_ability=(
+                not summary.ability_used
+                and summary.available_action_points >= summary.ability_cost
+            ),
+        ),
+    )
 
 
 async def search_battle(event, services, player_id: int, bot=None):
@@ -1816,15 +1936,60 @@ async def search_battle(event, services, player_id: int, bot=None):
             battle_markup(True),
         )
         return
-    await send_or_edit(event, battle_started_text(battle), battle_markup())
+    summary = services.battle_round_summary(battle, player_id)
+    await send_or_edit(
+        event,
+        battle_started_text(battle)
+        + "\n"
+        + battle_status_text(
+            battle,
+            player_id,
+            opponent_action_points=summary.opponent_action_points,
+            available_action_points=summary.available_action_points,
+            attack_count=summary.attack_count,
+            block_count=summary.block_count,
+            bonus_count=summary.bonus_count,
+            ability_used=summary.ability_used,
+        ),
+        battle_actions_markup(
+            can_switch=summary.can_switch,
+            ability_cost=summary.ability_cost,
+            can_use_ability=(
+                not summary.ability_used
+                and summary.available_action_points >= summary.ability_cost
+            ),
+        ),
+    )
     if bot is not None and hasattr(bot, "send_message"):
         other_id = (
             battle.player_two_id
             if battle.player_one_id == player_id
             else battle.player_one_id
         )
+        opponent_summary = services.battle_round_summary(battle, other_id)
         await bot.send_message(
-            other_id, battle_started_text(battle), reply_markup=battle_markup()
+            other_id,
+            battle_started_text(battle)
+            + "\n"
+            + battle_status_text(
+                battle,
+                other_id,
+                opponent_action_points=opponent_summary.opponent_action_points,
+                available_action_points=opponent_summary.available_action_points,
+                attack_count=opponent_summary.attack_count,
+                block_count=opponent_summary.block_count,
+                bonus_count=opponent_summary.bonus_count,
+                ability_used=opponent_summary.ability_used,
+            ),
+            reply_markup=battle_actions_markup(
+                can_switch=opponent_summary.can_switch,
+                ability_cost=opponent_summary.ability_cost,
+                can_use_ability=(
+                    not opponent_summary.ability_used
+                    and opponent_summary.available_action_points
+                    >= opponent_summary.ability_cost
+                ),
+            ),
         )
 
 
@@ -1965,7 +2130,7 @@ def build_router(services, settings) -> Router:
         text = message.text
         if text == "👤 Профиль":
             return await show_profile(message, services, message.from_user.id)
-        if text == "Коллекция":
+        if text == COLLECTION_MENU_BUTTON:
             return await show_collection(message, services, message.from_user.id)
         if text == "📖 Галерея":
             return await show_gallery(message, services)
@@ -2346,6 +2511,71 @@ def build_router(services, settings) -> Router:
         if callback_data.action == "cancel_search":
             return await cancel_battle_search(callback, services, callback.from_user.id)
         return await callback.answer()
+
+    @router.callback_query(BattleCallback.filter())
+    async def battle_actions(callback: CallbackQuery, callback_data: BattleCallback):
+        if not callback.from_user:
+            return await callback.answer()
+        player_id = callback.from_user.id
+        battle = await services.get_active_battle(player_id)
+        if battle is None:
+            return await send_notice(callback, "Бой не найден")
+        try:
+            if callback_data.action == "back":
+                return await show_battle_round(
+                    callback, services, player_id, battle=battle
+                )
+            if callback_data.action == "switch":
+                return await show_battle_switch(callback, services, player_id)
+            if callback_data.action == "switch_choose":
+                battle = await services.record_battle_action(
+                    player_id, "switch", card_id=callback_data.card_id
+                )
+            elif callback_data.action == "attack":
+                battle = await services.record_battle_action(player_id, "attack")
+            elif callback_data.action == "block":
+                battle = await services.record_battle_action(player_id, "block")
+            elif callback_data.action == "bonus":
+                battle = await services.record_battle_action(player_id, "bonus")
+            elif callback_data.action == "ability":
+                battle = await services.record_battle_action(player_id, "ability")
+            else:
+                return await callback.answer()
+        except (DomainError, ValidationError, BattleRuleViolationError) as error:
+            return await send_alert(callback, f"⛔️ {error}")
+
+        await show_battle_round(callback, services, player_id, battle=battle)
+        bot = getattr(callback, "bot", None)
+        if bot is None or not hasattr(bot, "send_message"):
+            return
+        other_id = (
+            battle.player_two_id
+            if battle.player_one_id == player_id
+            else battle.player_one_id
+        )
+        opponent_summary = services.battle_round_summary(battle, other_id)
+        await bot.send_message(
+            other_id,
+            battle_status_text(
+                battle,
+                other_id,
+                opponent_action_points=opponent_summary.opponent_action_points,
+                available_action_points=opponent_summary.available_action_points,
+                attack_count=opponent_summary.attack_count,
+                block_count=opponent_summary.block_count,
+                bonus_count=opponent_summary.bonus_count,
+                ability_used=opponent_summary.ability_used,
+            ),
+            reply_markup=battle_actions_markup(
+                can_switch=opponent_summary.can_switch,
+                ability_cost=opponent_summary.ability_cost,
+                can_use_ability=(
+                    not opponent_summary.ability_used
+                    and opponent_summary.available_action_points
+                    >= opponent_summary.ability_cost
+                ),
+            ),
+        )
 
     @router.callback_query(BattlePassCallback.filter())
     async def battle_pass_actions(

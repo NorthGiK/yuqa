@@ -155,6 +155,10 @@ if _Router is None:
         """Tiny reply keyboard stand-in."""
 
         keyboard: list[list[KeyboardButton]]
+        resize_keyboard: bool = False
+        one_time_keyboard: bool = False
+        input_field_placeholder: str | None = None
+        selective: bool = False
 
     class InlineKeyboardBuilder:
         """Tiny keyboard builder used in tests."""
@@ -197,9 +201,22 @@ if _Router is None:
         def adjust(self, *sizes):
             self._sizes = list(sizes)
 
-        def as_markup(self):
+        def as_markup(
+            self,
+            *,
+            resize_keyboard: bool = False,
+            one_time_keyboard: bool = False,
+            input_field_placeholder: str | None = None,
+            selective: bool = False,
+        ):
             if not self._buttons:
-                return ReplyKeyboardMarkup([])
+                return ReplyKeyboardMarkup(
+                    [],
+                    resize_keyboard=resize_keyboard,
+                    one_time_keyboard=one_time_keyboard,
+                    input_field_placeholder=input_field_placeholder,
+                    selective=selective,
+                )
             sizes = self._sizes or [len(self._buttons)]
             rows = []
             index = 0
@@ -208,7 +225,13 @@ if _Router is None:
                 index += size
             if index < len(self._buttons):
                 rows.append(self._buttons[index:])
-            return ReplyKeyboardMarkup(rows)
+            return ReplyKeyboardMarkup(
+                rows,
+                resize_keyboard=resize_keyboard,
+                one_time_keyboard=one_time_keyboard,
+                input_field_placeholder=input_field_placeholder,
+                selective=selective,
+            )
 
     class CallbackData:
         """Compact callback data wrapper."""

@@ -54,6 +54,13 @@ class BattleQueueCallback(CallbackData, prefix="battleq"):
     action: str
 
 
+class BattleCallback(CallbackData, prefix="battle"):
+    """Battle round and action callbacks."""
+
+    action: str
+    card_id: int = 0
+
+
 class BattlePassCallback(CallbackData, prefix="bp"):
     """Battle pass player actions."""
 

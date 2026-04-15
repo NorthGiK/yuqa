@@ -1,6 +1,7 @@
 """Orchestration layer used by Telegram handlers."""
 
 import re
+from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from random import Random
@@ -13,6 +14,14 @@ from yuqa.battle_pass.domain.entities import (
     BattlePassSeason,
 )
 from yuqa.battles.domain.engine import BattleEngine
+from yuqa.battles.domain.actions import (
+    AttackAction,
+    BattleAction,
+    BlockAction,
+    BonusAction,
+    SwitchCardAction,
+    UseAbilityAction,
+)
 from yuqa.battles.domain.entities import Battle, BattleCardState, BattleSide
 from yuqa.cards.domain.entities import Ability, CardTemplate, PlayerCard
 from yuqa.cards.domain.services import CardProgressionService
@@ -69,6 +78,7 @@ from yuqa.players.domain.entities import (
 from yuqa.quests.domain.entities import QuestReward
 from yuqa.shared.enums import (
     BannerType,
+    BattleActionType,
     CardClass,
     CardForm,
     IdeaStatus,
@@ -79,6 +89,7 @@ from yuqa.shared.enums import (
     Universe,
 )
 from yuqa.shared.errors import (
+    BattleRuleViolationError,
     EntityNotFoundError,
     ForbiddenActionError,
     ValidationError,
@@ -127,6 +138,20 @@ _NICKNAME_RE = re.compile(r"^[\w]{3,24}$", re.UNICODE)
 _MAX_TITLE_LENGTH = 60
 _TOP_MODES = {"rating", "badenko_cards", "creator_points"}
 _MAX_ACTION_EVENTS = 1_000
+
+
+@dataclass(slots=True)
+class BattleRoundSummary:
+    """Compact snapshot of a player's current battle choices."""
+
+    attack_count: int
+    block_count: int
+    bonus_count: int
+    ability_used: bool
+    available_action_points: int
+    opponent_action_points: int
+    ability_cost: int
+    can_switch: bool
 
 
 def _next_id(items) -> int:
@@ -220,6 +245,7 @@ class TelegramServices:
         self.action_events: list[tuple[int, str]] = (
             self.store.action_events if self.store is not None else []
         )
+        self.battle_action_drafts: dict[tuple[int, int, int], list[BattleAction]] = {}
         self.rng = Random()
         self.ideas = (
             PersistentIdeaRepository(self.store)
@@ -228,6 +254,7 @@ class TelegramServices:
             if self.catalog
             else InMemoryIdeaRepository()
         )
+        self._clear_all_battles()
         if self.store is not None:
             self.card_templates = PersistentCardTemplateRepository(self.store)
             self.banners = PersistentBannerRepository(self.store)
@@ -265,6 +292,7 @@ class TelegramServices:
     async def shutdown(self) -> None:
         """Flush state and release storage resources."""
 
+        self._clear_all_battles()
         await self.flush()
         if self.store is not None:
             self.store.close()
@@ -670,6 +698,7 @@ class TelegramServices:
         for battle_id, battle in list(self.battles.items.items()):
             if telegram_id in {battle.player_one_id, battle.player_two_id}:
                 await self.battles.delete(battle_id)
+                self._clear_battle_round_drafts(battle_id)
 
         self.search_queue.pop(telegram_id, None)
         self.deck_drafts.pop(telegram_id, None)
@@ -1362,6 +1391,202 @@ class TelegramServices:
         self.battle_engine.start_battle(battle)
         await self.battles.add(battle)
         return battle
+
+    async def get_active_battle(self, telegram_id: int) -> Battle | None:
+        """Return the active battle for one player, if any."""
+
+        getter = getattr(self.battles, "get_active_by_player", None)
+        if getter is None:
+            getter = getattr(self.battles, "get_active_battle_for_player", None)
+        if getter is None:
+            raise AttributeError("battle repository does not support active lookups")
+        return await getter(telegram_id)
+
+    def _battle_round_key(
+        self, battle_id: int, round_number: int, player_id: int
+    ) -> tuple[int, int, int]:
+        """Return the lookup key for one round draft."""
+
+        return battle_id, round_number, player_id
+
+    def _battle_round_actions(
+        self, battle_id: int, round_number: int, player_id: int
+    ) -> list[BattleAction]:
+        """Return the pending actions for one player in one round."""
+
+        return self.battle_action_drafts.setdefault(
+            self._battle_round_key(battle_id, round_number, player_id),
+            [],
+        )
+
+    def _battle_round_summary(
+        self, battle: Battle, player_id: int
+    ) -> BattleRoundSummary:
+        """Summarize one player's draft for the current round."""
+
+        actions = self.battle_action_drafts.get(
+            self._battle_round_key(battle.id, battle.current_round, player_id),
+            [],
+        )
+        attack_count = 0
+        block_count = 0
+        bonus_count = 0
+        ability_used = False
+        spent_ap = 0
+        for action in actions:
+            spent_ap += action.ap_cost
+            if action.action_type == BattleActionType.ATTACK:
+                attack_count += 1
+            elif action.action_type == BattleActionType.BLOCK:
+                block_count += 1
+            elif action.action_type == BattleActionType.BONUS:
+                bonus_count += 1
+            elif action.action_type == BattleActionType.USE_ABILITY:
+                ability_used = True
+        active_card = battle.side_for(player_id).active_card()
+        ability_cost = active_card.template.ability_for(active_card.form).cost
+        base_ap = min(5, battle.current_round)
+        available_action_points = max(0, base_ap - spent_ap)
+        opponent_actions = self.battle_action_drafts.get(
+            self._battle_round_key(
+                battle.id, battle.current_round, battle.opponent_side_for(player_id).player_id
+            ),
+            [],
+        )
+        opponent_spent_ap = 0
+        for action in opponent_actions:
+            opponent_spent_ap += action.ap_cost
+        opponent_action_points = max(0, base_ap - opponent_spent_ap)
+        return BattleRoundSummary(
+            attack_count=attack_count,
+            block_count=block_count,
+            bonus_count=bonus_count,
+            ability_used=ability_used,
+            available_action_points=available_action_points,
+            opponent_action_points=opponent_action_points,
+            ability_cost=ability_cost,
+            can_switch=not actions and available_action_points > 0,
+        )
+
+    def battle_round_summary(self, battle: Battle, player_id: int) -> BattleRoundSummary:
+        """Expose the current round summary for Telegram presentation."""
+
+        return self._battle_round_summary(battle, player_id)
+
+    def _clear_battle_round_drafts(self, battle_id: int) -> None:
+        """Drop all drafts for a battle."""
+
+        self.battle_action_drafts = {
+            key: value
+            for key, value in self.battle_action_drafts.items()
+            if key[0] != battle_id
+        }
+
+    def _clear_all_battles(self) -> None:
+        """Remove every stored battle, queue entry, and round draft."""
+
+        if self.battles.items:
+            self.battles.items.clear()
+        if self.search_queue:
+            self.search_queue.clear()
+        self.battle_action_drafts.clear()
+        if self.store is not None:
+            self.store.save()
+
+    async def record_battle_action(
+        self,
+        player_id: int,
+        action: str,
+        *,
+        card_id: int | None = None,
+    ) -> Battle:
+        """Append one action to the player's draft and resolve finished rounds."""
+
+        battle = await self.get_active_battle(player_id)
+        if battle is None:
+            raise EntityNotFoundError("battle not found")
+        summary = self._battle_round_summary(battle, player_id)
+        actions = self._battle_round_actions(
+            battle.id, battle.current_round, player_id
+        )
+        if action == "switch" and actions:
+            raise BattleRuleViolationError("switch can be used only as the first choice")
+        if action == "attack":
+            if summary.available_action_points < 1:
+                raise BattleRuleViolationError("not enough action points")
+            actions.append(AttackAction(action_type=BattleActionType.ATTACK, ap_cost=1))
+        elif action == "block":
+            if summary.available_action_points < 1:
+                raise BattleRuleViolationError("not enough action points")
+            actions.append(BlockAction(action_type=BattleActionType.BLOCK, ap_cost=1))
+        elif action == "bonus":
+            if summary.available_action_points < 1:
+                raise BattleRuleViolationError("not enough action points")
+            actions.append(BonusAction(action_type=BattleActionType.BONUS, ap_cost=1))
+        elif action == "ability":
+            if summary.ability_used:
+                raise BattleRuleViolationError("ability can be used only once per round")
+            if summary.available_action_points < summary.ability_cost:
+                raise BattleRuleViolationError("Не достаточно Очков Действия для способности")
+            active_card = battle.side_for(player_id).active_card()
+            actions.append(
+                UseAbilityAction(
+                    action_type=BattleActionType.USE_ABILITY,
+                    ap_cost=summary.ability_cost,
+                    player_card_id=active_card.player_card_id,
+                )
+            )
+        elif action == "switch":
+            if card_id is None:
+                raise ValidationError("switch requires card_id")
+            if summary.available_action_points < 1:
+                raise BattleRuleViolationError("not enough action points")
+            side = battle.side_for(player_id)
+            card = side.cards.get(card_id)
+            if card is None or not card.alive:
+                raise BattleRuleViolationError("cannot switch to dead/unknown card")
+            actions.append(
+                SwitchCardAction(
+                    action_type=BattleActionType.SWITCH_CARD,
+                    ap_cost=1,
+                    new_active_card_id=card_id,
+                )
+            )
+        else:
+            raise ValidationError("unsupported battle action")
+
+        if self._battle_round_summary(battle, player_id).available_action_points > 0:
+            await self.battles.save(battle)
+            return battle
+
+        opponent_id = battle.opponent_side_for(player_id).player_id
+        opponent_summary = self._battle_round_summary(battle, opponent_id)
+        if opponent_summary.available_action_points > 0:
+            await self.battles.save(battle)
+            return battle
+
+        actions_by_player = {
+            battle.player_one_id: list(
+                self.battle_action_drafts.get(
+                    self._battle_round_key(
+                        battle.id, battle.current_round, battle.player_one_id
+                    ),
+                    [],
+                )
+            ),
+            battle.player_two_id: list(
+                self.battle_action_drafts.get(
+                    self._battle_round_key(
+                        battle.id, battle.current_round, battle.player_two_id
+                    ),
+                    [],
+                )
+            ),
+        }
+        result = self.battle_engine.resolve_round(battle, actions_by_player)
+        self._clear_battle_round_drafts(battle.id)
+        await self.battles.save(result.battle)
+        return result.battle
 
     async def search_battle(self, telegram_id: int) -> Battle | None:
         """Join the matchmaking queue and start a battle when possible."""

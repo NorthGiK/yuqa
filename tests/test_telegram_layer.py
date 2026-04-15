@@ -15,6 +15,7 @@ from yuqa.shared.enums import (
     Rarity,
     Universe,
 )
+from yuqa.shared.value_objects.deck_slots import DeckSlots
 from yuqa.shared.value_objects.image_ref import ImageRef
 from yuqa.shared.value_objects.resource_wallet import ResourceWallet
 from yuqa.shared.value_objects.stat_block import StatBlock
@@ -27,6 +28,7 @@ from yuqa.telegram.compat import (
 )
 from yuqa.telegram.reply import safe_edit, send_card_preview
 from yuqa.telegram.router import (
+    build_router,
     show_admin,
     show_card_detail,
     show_gallery,
@@ -36,6 +38,7 @@ from yuqa.telegram.router import (
     show_cards,
     show_deck_builder,
     show_free_rewards,
+    show_battle,
     show_premium_battle_pass,
     show_profile,
     show_tops,
@@ -57,6 +60,7 @@ from yuqa.telegram.ui import (
     admin_banner_markup,
     admin_markup,
     battle_markup,
+    COLLECTION_MENU_BUTTON,
     cards_markup,
     collection_markup,
     main_menu_markup,
@@ -94,7 +98,7 @@ async def test_home_and_menu_are_localized() -> None:
     assert "⚔️" in text
     buttons = _button_texts(markup)
     assert "👤 Профиль" in buttons
-    assert "Коллекция" in buttons
+    assert "🐦‍🔥 Коллекция" in buttons
     assert "📖 Галерея" in buttons
     assert "💡 Идеи" in buttons
     assert "🏆 Топы" in buttons
@@ -115,7 +119,32 @@ async def test_home_and_menu_are_localized() -> None:
     assert "🖼️ Фоны профиля" in _button_texts(
         profile_markup(is_owner=True, has_nickname=False)
     )
+    assert "🔍 Поиск соперника" in _button_texts(battle_markup())
     assert "🧱 Конструктор колоды" in _button_texts(battle_markup())
+    assert getattr(markup, "resize_keyboard", False) is True
+
+
+@pytest.mark.asyncio
+async def test_collection_menu_button_opens_collection_hub() -> None:
+    """The collection menu button should open the collection hub screen."""
+
+    services = TelegramServices()
+    router = build_router(services, SimpleNamespace(admin_ids=set()))
+    navigate_main_menu = next(
+        handler.callback
+        for handler in router.message.handlers
+        if handler.callback.__name__ == "navigate_main_menu"
+    )
+    message = Message(from_user=User(1), text=COLLECTION_MENU_BUTTON)
+    state = FSMContext()
+
+    await navigate_main_menu(message, state)
+
+    assert message.text is not None
+    assert "Коллекция" in message.text
+    buttons = _button_texts(message.reply_markup)
+    assert "🎴 Мои Карты" in buttons
+    assert "💡 Мои идеи" in buttons
     assert "🎁 Бесплатно" in _button_texts(shop_markup([]))
     assert "Карт в коллекции" in collection_text(Player(telegram_id=1))
 
@@ -187,6 +216,7 @@ async def test_card_collection_and_buttons_are_readable() -> None:
     assert "Коллекция" in text
     assert "Рейна" in text
     assert "🎴 Карта #7" in _button_texts(markup)
+    assert "🔍 Поиск соперника" in _button_texts(battle_markup())
     assert "🧱 Конструктор колоды" in _button_texts(battle_markup())
     assert "Пока пусто" in cards_text([], {})
 
@@ -203,6 +233,55 @@ async def test_search_battle_requires_a_complete_deck() -> None:
     assert callback.answered_text == "⛔️ Колода не полностью собрана"
     assert callback.alert is True
     assert services.search_queue == {}
+
+
+@pytest.mark.asyncio
+async def test_show_battle_renders_status_and_round_actions() -> None:
+    """The battle screen should expose the round status and action buttons."""
+
+    services = TelegramServices()
+    template = CardTemplate(
+        id=1,
+        name="Рейна",
+        universe=Universe.ORIGINAL,
+        rarity=Rarity.EPIC,
+        image=ImageRef("reina.png"),
+        card_class=CardClass.MELEE,
+        base_stats=StatBlock(10, 20, 5),
+        ascended_stats=StatBlock(15, 25, 8),
+        ability=Ability(cost=0, cooldown=0),
+    )
+    await services.card_templates.add(template)
+    for player_id in (1, 2):
+        player = await services.get_or_create_player(player_id)
+        player.battle_deck = DeckSlots(
+            (
+                player_id * 10 + 1,
+                player_id * 10 + 2,
+                player_id * 10 + 3,
+                player_id * 10 + 4,
+                player_id * 10 + 5,
+            )
+        )
+        for card_id in player.battle_deck.card_ids:
+            await services.player_cards.add(
+                PlayerCard(id=card_id, owner_player_id=player_id, template_id=1)
+            )
+
+    await services.start_battle(1, 2)
+
+    message = Message(from_user=User(1), text="old")
+    await show_battle(message, services, 1)
+
+    assert message.text is not None
+    assert "Колода Оппонента" in message.text
+    assert "Текущий выбор" in message.text
+    buttons = _button_texts(message.reply_markup)
+    assert "⚔️Атака" in buttons
+    assert "🛡️Блок" in buttons
+    assert "🌟Бонус" in buttons
+    assert "🦹‍♂️Сменить карту" in buttons
+    assert "🔥Способность 0" in buttons
 
 
 @pytest.mark.asyncio
@@ -381,7 +460,7 @@ async def test_battle_markup_switches_between_search_and_cancel() -> None:
 
     assert "🔍 Поиск соперника" in _button_texts(battle_markup(False))
     assert "⏳ Отменить поиск" in _button_texts(battle_markup(True))
-    assert "🧱 Конструктор колоды" not in _button_texts(battle_markup(False))
+    assert "🧱 Конструктор колоды" in _button_texts(battle_markup(False))
 
 
 def test_admin_banner_markup_has_delete_button_only_when_editable() -> None:

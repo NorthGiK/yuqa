@@ -28,7 +28,7 @@ class BlockAction(BattleAction):
 
 @dataclass(frozen=True, slots=True)
 class BonusAction(BattleAction):
-    """Gain bonus action points."""
+    """Spend action points on a bonus move."""
 
 
 @dataclass(frozen=True, slots=True)

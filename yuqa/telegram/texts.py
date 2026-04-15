@@ -139,6 +139,57 @@ def battle_started_text(battle: Battle) -> str:
     )
 
 
+def _battle_card_line(
+    card, *, active: bool = False
+) -> str:
+    """Render one battle card row."""
+
+    marker = "✅" if active else ""
+    return (
+        f"•{marker}{escape(card.template.name)} |♥️{card.current_health}| |⚔️{card.damage}| |🛡️{card.defense}|"
+    )
+
+
+def battle_status_text(
+    battle: Battle,
+    player_id: int,
+    *,
+    opponent_action_points: int,
+    available_action_points: int,
+    attack_count: int,
+    block_count: int,
+    bonus_count: int,
+    ability_used: bool,
+) -> str:
+    """Render the battle accessibility screen for one player."""
+
+    opponent_side = battle.opponent_side_for(player_id)
+    player_side = battle.side_for(player_id)
+    opponent_cards = "\n".join(
+        _battle_card_line(
+            card, active=card.player_card_id == opponent_side.active_card_id
+        )
+        for card in opponent_side.cards.values()
+    )
+    player_cards = "\n".join(
+        _battle_card_line(card, active=card.player_card_id == player_side.active_card_id)
+        for card in player_side.cards.values()
+    )
+    return (
+        "🪖Колода Оппонента:\n"
+        f"Очки действия {opponent_action_points}\n"
+        f"{opponent_cards}\n\n"
+        "🫪Твоя Колода:\n"
+        f"Очки действия {available_action_points}\n"
+        f"{player_cards}\n\n"
+        "Текущий выбор:\n"
+        f"⚔️ {attack_count}\n"
+        f"🛡️ {block_count}\n"
+        f"🌟 {bonus_count}\n"
+        f"🔥 {'✅' if ability_used else '❌'}"
+    )
+
+
 def battle_pass_text(season: BattlePassSeason | None, player: Player) -> str:
     """Render the current battle pass and player progress."""
 
@@ -547,7 +598,7 @@ def card_template_text(template: CardTemplate) -> str:
         f"🧩 <b>Класс:</b> <code>{template.card_class.value}</code>\n\n"
         f"💥 <b>База:</b> <code>{_stats(template.base_stats)}</code>\n"
         f"🔥 <b>Возвышение:</b> <code>{_stats(template.ascended_stats)}</code>\n\n"
-        f"<i>Способность:</i> <code>{ability.cost}/{ability.cooldown}</code>"
+        f"<i>Способность:</i> <code>{ability.cost}/{ability.cooldown}</code>\n\n"
     )
 
 

@@ -93,10 +93,11 @@ def test_battle_ap_rules_and_effects():
     )
     engine = BattleEngine()
     engine.start_battle(battle)
+    battle.current_round = 4
     killer = battle.first_turn_player_id
     active_card_id = battle.side_for(killer).active_card_id
     actions = [
-        BonusAction(action_type=BattleActionType.BONUS, ap_cost=0, power_spent=2),
+        BonusAction(action_type=BattleActionType.BONUS, ap_cost=1, power_spent=2),
         BlockAction(action_type=BattleActionType.BLOCK, ap_cost=1, power_spent=1),
         UseAbilityAction(
             action_type=BattleActionType.USE_ABILITY,
@@ -112,4 +113,4 @@ def test_battle_ap_rules_and_effects():
     result = engine.resolve_round(
         battle, actions_by_player={killer: actions, 1 if killer == 2 else 2: []}
     )
-    assert result.battle.current_round == 2
+    assert result.battle.current_round == 5

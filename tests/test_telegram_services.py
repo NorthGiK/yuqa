@@ -20,6 +20,7 @@ from yuqa.shared.enums import (
     Universe,
 )
 from yuqa.shared.errors import (
+    BattleRuleViolationError,
     EntityNotFoundError,
     ForbiddenActionError,
     ValidationError,
@@ -220,6 +221,105 @@ async def test_battle_can_start_and_is_saved(sample_template: CardTemplate) -> N
     assert battle.first_turn_player_id in {1, 2}
     assert battle.id in services.battles.items
     assert battle_started_text(battle).startswith("💥 <b>Бой начался!</b>")
+
+
+@pytest.mark.asyncio
+async def test_battle_round_actions_enforce_points_and_switch_rules(
+    sample_template: CardTemplate,
+) -> None:
+    """Battle drafts should reject dead-card switches and AP overuse."""
+
+    services = TelegramServices()
+    await services.card_templates.add(sample_template)
+
+    for player_id in (1, 2):
+        player = await services.get_or_create_player(player_id)
+        player.battle_deck = DeckSlots(
+            (
+                player_id * 10 + 1,
+                player_id * 10 + 2,
+                player_id * 10 + 3,
+                player_id * 10 + 4,
+                player_id * 10 + 5,
+            )
+        )
+        for card_id in player.battle_deck.card_ids:
+            await services.player_cards.add(
+                PlayerCard(
+                    id=card_id,
+                    owner_player_id=player_id,
+                    template_id=1,
+                    level=1,
+                    copies_owned=1,
+                    current_form=CardForm.BASE,
+                )
+            )
+
+    battle = await services.start_battle(1, 2)
+    player_id = battle.player_one_id
+    before_summary = services.battle_round_summary(battle, player_id)
+    active_card_id = battle.side_for(player_id).active_card_id
+    dead_card = next(
+        card
+        for card in battle.side_for(player_id).cards.values()
+        if card.player_card_id != active_card_id
+    )
+    dead_card.alive = False
+
+    with pytest.raises(BattleRuleViolationError):
+        await services.record_battle_action(
+            player_id, "switch", card_id=dead_card.player_card_id
+        )
+
+    battle = await services.record_battle_action(player_id, "bonus")
+    after_bonus = services.battle_round_summary(battle, player_id)
+    assert before_summary.available_action_points == 1
+    assert after_bonus.available_action_points == 0
+
+    other_id = battle.player_two_id
+    battle = await services.record_battle_action(other_id, "attack")
+    assert battle.current_round == 2
+    assert battle.status == BattleStatus.ACTIVE
+
+
+@pytest.mark.asyncio
+async def test_battle_ability_can_only_be_used_once_per_round(
+    sample_template: CardTemplate,
+) -> None:
+    """A player should not be able to fire the active card ability twice."""
+
+    services = TelegramServices()
+    await services.card_templates.add(sample_template)
+
+    for player_id in (1, 2):
+        player = await services.get_or_create_player(player_id)
+        player.battle_deck = DeckSlots(
+            (
+                player_id * 10 + 1,
+                player_id * 10 + 2,
+                player_id * 10 + 3,
+                player_id * 10 + 4,
+                player_id * 10 + 5,
+            )
+        )
+        for card_id in player.battle_deck.card_ids:
+            await services.player_cards.add(
+                PlayerCard(
+                    id=card_id,
+                    owner_player_id=player_id,
+                    template_id=1,
+                    level=1,
+                    copies_owned=1,
+                    current_form=CardForm.BASE,
+                )
+            )
+
+    battle = await services.start_battle(1, 2)
+    player_id = battle.player_one_id
+
+    battle = await services.record_battle_action(player_id, "ability")
+    with pytest.raises(BattleRuleViolationError):
+        await services.record_battle_action(player_id, "ability")
 
 
 @pytest.mark.asyncio

@@ -44,6 +44,7 @@ from yuqa.telegram.compat import (
 )
 from yuqa.telegram.reply import (
     send_card_preview,
+    send_alert,
     send_media_preview,
     send_notice,
     send_or_edit,
@@ -86,6 +87,7 @@ from yuqa.telegram.texts import (
     premium_battle_pass_seasons_text,
     premium_battle_pass_text,
     battle_started_text,
+    collection_text,
     battle_text,
     banner_wizard_text,
     card_level_up_confirm_text,
@@ -124,6 +126,7 @@ from yuqa.telegram.ui import (
     banner_markup,
     battle_markup,
     battle_pass_markup,
+    collection_markup,
     premium_battle_pass_markup,
     card_level_up_confirm_markup,
     card_markup,
@@ -389,6 +392,13 @@ async def show_profile(
         content_type=selected_background.media.content_type,
         reply_markup=markup,
     )
+
+
+async def show_collection(event, services, player_id: int):
+    """Show the collection hub."""
+
+    player = await services.get_or_create_player(player_id)
+    await send_or_edit(event, collection_text(player), collection_markup())
 
 
 async def show_cards(event, services, player_id: int, page: int = 1):
@@ -1785,15 +1795,20 @@ async def start_battle(message: Message, services, command: CommandObject):
         battle = await services.start_battle(
             message.from_user.id, int(command.args.strip())
         )
-    except (ValueError, DomainError, ValidationError) as error:
+    except ValueError as error:
         return await message.answer(f"❌ {error}")
+    except (DomainError, ValidationError) as error:
+        return await send_alert(message, f"⛔️ {error}")
     await message.answer(battle_started_text(battle), reply_markup=battle_markup())
 
 
 async def search_battle(event, services, player_id: int, bot=None):
     """Add a player to matchmaking and announce a battle when it is found."""
 
-    battle = await services.search_battle(player_id)
+    try:
+        battle = await services.search_battle(player_id)
+    except (DomainError, ValidationError) as error:
+        return await send_alert(event, f"⛔️ {error}")
     if battle is None:
         await send_or_edit(
             event,
@@ -1950,24 +1965,16 @@ def build_router(services, settings) -> Router:
         text = message.text
         if text == "👤 Профиль":
             return await show_profile(message, services, message.from_user.id)
-        if text == "🎴 Коллекция":
-            return await show_cards(message, services, message.from_user.id)
-        if text == "🖼 Фоны профиля":
-            return await show_profile_backgrounds(
-                message, services, message.from_user.id
-            )
+        if text == "Коллекция":
+            return await show_collection(message, services, message.from_user.id)
         if text == "📖 Галерея":
             return await show_gallery(message, services)
         if text == "💡 Идеи":
             return await show_ideas(message, services, message.from_user.id)
-        if text == "📚 Моя коллекция":
-            return await show_idea_collection(message, services, message.from_user.id)
         if text == "🏆 Топы":
             return await show_tops(message, services)
         if text == "⚔️ Бой":
             return await show_battle(message, services, message.from_user.id)
-        if text == "🧱 Конструктор колоды":
-            return await show_deck_builder(message, services, message.from_user.id)
         if text == "🏁 Battle Pass":
             return await show_battle_pass(message, services, message.from_user.id)
         if text == "💎 Premium Battle Pass":
@@ -1978,8 +1985,6 @@ def build_router(services, settings) -> Router:
             return await show_clan(message, services, message.from_user.id)
         if text == "🛒 Магазин":
             return await show_shop(message, services)
-        if text == "🎁 Бесплатно":
-            return await show_free_rewards(message, services, message.from_user.id)
         if text == "🎁 Баннеры":
             return await show_banners(message, services)
         if text == "🛠 Админка":

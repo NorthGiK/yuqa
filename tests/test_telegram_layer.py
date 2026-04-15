@@ -39,12 +39,14 @@ from yuqa.telegram.router import (
     show_premium_battle_pass,
     show_profile,
     show_tops,
+    search_battle,
 )
 from yuqa.telegram.services import TelegramServices
 from yuqa.telegram.texts import (
     admin_text,
     battle_text,
     cards_text,
+    collection_text,
     menu_text,
     premium_battle_pass_text,
     profile_backgrounds_text,
@@ -56,7 +58,10 @@ from yuqa.telegram.ui import (
     admin_markup,
     battle_markup,
     cards_markup,
+    collection_markup,
     main_menu_markup,
+    profile_markup,
+    shop_markup,
     tops_markup,
 )
 
@@ -89,20 +94,30 @@ async def test_home_and_menu_are_localized() -> None:
     assert "⚔️" in text
     buttons = _button_texts(markup)
     assert "👤 Профиль" in buttons
+    assert "Коллекция" in buttons
     assert "📖 Галерея" in buttons
     assert "💡 Идеи" in buttons
     assert "🏆 Топы" in buttons
     assert "⚔️ Бой" in buttons
     assert "🏁 Battle Pass" in buttons
-    assert "🎁 Бесплатно" in buttons
-    assert "🖼 Фоны профиля" in buttons
-    assert "📚 Моя коллекция" in buttons
-    assert "🧱 Конструктор колоды" in buttons
+    assert "🎴 Мои Карты" not in buttons
+    assert "💡 Мои идеи" not in buttons
+    assert "🖼️ Фоны профиля" not in buttons
+    assert "🧱 Конструктор колоды" not in buttons
+    assert "🎁 Бесплатно" not in buttons
     assert "💎 Premium Battle Pass" not in buttons
     assert "💎 Premium Battle Pass" in _button_texts(main_menu_markup(is_premium=True))
     assert "🛠 Админка" not in buttons
     assert "🛠 Админка" in _button_texts(main_menu_markup(is_admin=True))
     assert "🗑 Удалить игрока" in _button_texts(admin_markup("players"))
+    assert "🎴 Мои Карты" in _button_texts(collection_markup())
+    assert "💡 Мои идеи" in _button_texts(collection_markup())
+    assert "🖼️ Фоны профиля" in _button_texts(
+        profile_markup(is_owner=True, has_nickname=False)
+    )
+    assert "🧱 Конструктор колоды" in _button_texts(battle_markup())
+    assert "🎁 Бесплатно" in _button_texts(shop_markup([]))
+    assert "Карт в коллекции" in collection_text(Player(telegram_id=1))
 
 
 @pytest.mark.asyncio
@@ -172,8 +187,22 @@ async def test_card_collection_and_buttons_are_readable() -> None:
     assert "Коллекция" in text
     assert "Рейна" in text
     assert "🎴 Карта #7" in _button_texts(markup)
-    assert "⬅️ В меню" not in _button_texts(battle_markup())
+    assert "🧱 Конструктор колоды" in _button_texts(battle_markup())
     assert "Пока пусто" in cards_text([], {})
+
+
+@pytest.mark.asyncio
+async def test_search_battle_requires_a_complete_deck() -> None:
+    """Battle search should stop early when the deck is incomplete."""
+
+    services = TelegramServices()
+    callback = CallbackQuery(from_user=User(1), message=Message(text="old"))
+
+    await search_battle(callback, services, 1)
+
+    assert callback.answered_text == "⛔️ Колода не полностью собрана"
+    assert callback.alert is True
+    assert services.search_queue == {}
 
 
 @pytest.mark.asyncio

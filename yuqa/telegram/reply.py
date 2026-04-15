@@ -89,6 +89,14 @@ async def send_notice(
     return await event.answer(text, reply_markup=reply_markup)
 
 
+async def send_alert(event: Message | CallbackQuery, text: str) -> Message | None:
+    """Show a popup alert for callbacks and fall back to a message otherwise."""
+
+    if isinstance(event, CallbackQuery):
+        return await event.answer(text, show_alert=True)
+    return await event.answer(text)
+
+
 async def send_card_preview(
     event: Message | CallbackQuery,
     photo: str,

@@ -41,3 +41,4 @@
 - Prefer changing domain modules over adding logic directly to the Telegram router.
 - Add regression tests beside the feature you changed.
 - If an edit crosses transport and domain boundaries, stop and verify the split is still coherent.
+- For menu reshuffles, keep reply-keyboard labels in `yuqa/telegram/ui.py` aligned with the text routing in `yuqa/telegram/router.py`, and use `yuqa/telegram/reply.py` for callback popups instead of visible chat notices when the UX calls for a popup.

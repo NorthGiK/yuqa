@@ -101,12 +101,23 @@ def menu_text(player: Player) -> str:
     )
 
 
+def collection_text(player: Player) -> str:
+    """Build the collection hub screen."""
+
+    return (
+        "📚 <b>Коллекция</b>\n"
+        "<i>Выбери, что открыть дальше.</i>\n\n"
+        f"🎴 <b>Карт в коллекции:</b> <code>{player.collection_count}</code>"
+    )
+
+
 def battle_text(player: Player | None = None, searching: bool = False) -> str:
     """Explain how to start or cancel a battle search."""
 
     header = "⚔️ <b>Арена PvP</b>\n<i>Пора показать, кто тут главный!</i>\n\n"
     body = (
         "• для боя нужна колода из <b>5 разных карт</b>\n"
+        "• сначала собери колоду в конструкторе\n"
         "• поиск соперника подбирает игрока с разницей рейтинга <b>±100</b>\n"
         "• можно остановить поиск в любой момент\n"
     )

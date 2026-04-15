@@ -344,6 +344,32 @@ async def test_matchmaking_finds_close_opponents_and_can_cancel(
 
 
 @pytest.mark.asyncio
+async def test_battle_search_requires_a_complete_deck(
+    sample_template: CardTemplate,
+) -> None:
+    """Players without a saved deck should not enter matchmaking."""
+
+    services = TelegramServices()
+    await services.card_templates.add(sample_template)
+
+    player = await services.get_or_create_player(1)
+    for card_id in range(1, 6):
+        await services.player_cards.add(
+            PlayerCard(
+                id=card_id,
+                owner_player_id=player.telegram_id,
+                template_id=1,
+                level=1,
+                copies_owned=1,
+                current_form=CardForm.BASE,
+            )
+        )
+
+    with pytest.raises(ValidationError, match="Колода не полностью собрана"):
+        await services.search_battle(1)
+
+
+@pytest.mark.asyncio
 async def test_deck_constructor_can_toggle_clear_and_save(
     sample_template: CardTemplate,
 ) -> None:

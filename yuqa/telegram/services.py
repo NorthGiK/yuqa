@@ -1367,6 +1367,8 @@ class TelegramServices:
         """Join the matchmaking queue and start a battle when possible."""
 
         player = await self.get_or_create_player(telegram_id)
+        if player.battle_deck is None or len(player.battle_deck.card_ids) != 5:
+            raise ValidationError("Колода не полностью собрана")
         self.search_queue[player.telegram_id] = player.rating
         self._persist_runtime_state()
         return await self.process_matchmaking()
@@ -1921,16 +1923,12 @@ class TelegramServices:
         )
 
     async def _battle_side_for(self, player: Player) -> BattleSide:
-        """Build one battle side from the player's deck or first five cards."""
+        """Build one battle side from the player's battle deck."""
 
         cards = await self.list_player_cards(player.telegram_id)
-        deck_ids = (
-            player.battle_deck.card_ids
-            if player.battle_deck
-            else tuple(card.id for card in cards[:5])
-        )
-        if len(deck_ids) != 5:
-            raise ValidationError("для боя нужна колода из 5 карт")
+        if player.battle_deck is None or len(player.battle_deck.card_ids) != 5:
+            raise ValidationError("Колода не полностью собрана")
+        deck_ids = player.battle_deck.card_ids
         by_id = {card.id: card for card in cards}
         selected: list[BattleCardState] = []
         for card_id in deck_ids:

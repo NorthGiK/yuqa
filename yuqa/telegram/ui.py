@@ -28,13 +28,11 @@ from yuqa.telegram.compat import (
 
 _CARD_PAGE_SIZE = 10
 MAIN_MENU_BUTTON_ROWS: tuple[tuple[str, ...], ...] = (
-    ("👤 Профиль", "🎴 Коллекция"),
-    ("🖼 Фоны профиля", "📖 Галерея"),
-    ("💡 Идеи", "📚 Моя коллекция"),
+    ("👤 Профиль", "🐦‍🔥 Коллекция"),
+    ("📖 Галерея", "💡 Идеи"),
     ("🏆 Топы", "⚔️ Бой"),
-    ("🧱 Конструктор колоды", "🏁 Battle Pass"),
-    ("🏰 Клан", "🛒 Магазин"),
-    ("🎁 Бесплатно", "🎁 Баннеры"),
+    ("🏁 Battle Pass", "🏰 Клан"),
+    ("🛒 Магазин", "🎁 Баннеры"),
 )
 _PREMIUM_MENU_BUTTON = "💎 Premium Battle Pass"
 MAIN_MENU_BUTTON_TEXTS = {text for row in MAIN_MENU_BUTTON_ROWS for text in row} | {
@@ -96,7 +94,13 @@ def battle_markup(searching: bool = False) -> InlineKeyboardMarkup:
 
     button = "⏳ Отменить поиск" if searching else "🔍 Поиск соперника"
     action = "cancel_search" if searching else "search"
-    return _markup([(button, BattleQueueCallback(action=action))], (1,))
+    return _markup(
+        [
+            (button, BattleQueueCallback(action=action)),
+            ("🧱 Конструктор колоды", MenuCallback(section="deck")),
+        ],
+        (1, 1),
+    )
 
 
 def cards_markup(
@@ -237,11 +241,26 @@ def profile_markup(
     buttons = []
     if is_owner:
         buttons.append(("✏️ Никнейм", ProfileCallback(action="edit_nickname")))
+        buttons.append(("🖼️ Фоны профиля", MenuCallback(section="profile_backgrounds")))
         if has_nickname:
             buttons.append(
                 ("🧹 Сбросить ник", ProfileCallback(action="clear_nickname"))
             )
-    return _markup(buttons, (2, 2, 1))
+    if not buttons:
+        return _markup(buttons, ())
+    return _markup(buttons, (2, 1) if is_owner and has_nickname else (2,))
+
+
+def collection_markup() -> InlineKeyboardMarkup:
+    """Return the collection hub keyboard."""
+
+    return _markup(
+        [
+            ("🎴 Мои Карты", MenuCallback(section="cards")),
+            ("💡 Мои идеи", MenuCallback(section="idea_collection")),
+        ],
+        (1, 1),
+    )
 
 
 def shop_markup(item_ids: list[int]) -> InlineKeyboardMarkup:
@@ -251,7 +270,12 @@ def shop_markup(item_ids: list[int]) -> InlineKeyboardMarkup:
         (f"🛒 Купить #{item_id}", ShopCallback(action="buy", item_id=item_id))
         for item_id in item_ids
     ]
-    return _markup(buttons, (2, 2))
+    buttons.append(("🎁 Бесплатно", MenuCallback(section="free_rewards")))
+    sizes = [2] * (len(item_ids) // 2)
+    if len(item_ids) % 2:
+        sizes.append(1)
+    sizes.append(1)
+    return _markup(buttons, tuple(sizes))
 
 
 def banner_markup(banner_id: int) -> InlineKeyboardMarkup:

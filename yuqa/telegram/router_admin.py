@@ -8,6 +8,7 @@ from yuqa.telegram.reply import send_notice
 from yuqa.telegram.router_helpers import _parse_int, _profile_backgrounds, _templates
 from yuqa.telegram.router_views import show_admin
 from yuqa.telegram.states import (
+    AdminPlayerCardEdit,
     AdminPlayerEdit,
     BannerCreate,
     BannerRewardCreate,
@@ -43,6 +44,8 @@ from yuqa.telegram.router_wizards_banners import (
     start_banner_create,
 )
 from yuqa.telegram.router_wizards_cards import (
+    capture_admin_player_card_player_id,
+    capture_admin_player_card_template_id,
     card_ability_cooldown,
     card_ability_cost,
     card_ability_effects,
@@ -55,6 +58,7 @@ from yuqa.telegram.router_wizards_cards import (
     capture_universe_add,
     capture_universe_remove,
     profile_background_media,
+    start_admin_player_card_edit,
     start_card_create,
     start_profile_background_create,
     start_universe_create,
@@ -179,6 +183,12 @@ def _register_admin_callbacks(router: Router, services, settings) -> None:
             return await callback.message.answer(
                 "Введи ID карты, которую нужно удалить 🗑️",
                 reply_markup=admin_wizard_markup("cards"),
+            )
+        if action == "player_add_card":
+            return await start_admin_player_card_edit(callback.message, state, "add")
+        if action == "player_remove_card":
+            return await start_admin_player_card_edit(
+                callback.message, state, "remove"
             )
         if action == "create_banner":
             return await start_banner_create(callback.message, state)
@@ -426,6 +436,14 @@ def _register_admin_state_handlers(router: Router, services) -> None:
     @router.message(AdminPlayerEdit.value)
     async def _admin_player_value(message: Message, state: FSMContext):
         await capture_admin_player_value(message, services, state)
+
+    @router.message(AdminPlayerCardEdit.player_id)
+    async def _admin_player_card_id(message: Message, state: FSMContext):
+        await capture_admin_player_card_player_id(message, state)
+
+    @router.message(AdminPlayerCardEdit.template_id)
+    async def _admin_player_card_template(message: Message, state: FSMContext):
+        await capture_admin_player_card_template_id(message, services, state)
 
     @router.message(PlayerDelete.player_id)
     async def _admin_player_delete(message: Message, state: FSMContext):

@@ -8,6 +8,7 @@ from yuqa.telegram.compat import FSMContext, Message
 from yuqa.telegram.router_helpers import _media_from_message, _parse_effects, _parse_int
 from yuqa.telegram.router_views import show_admin
 from yuqa.telegram.states import (
+    AdminPlayerCardEdit,
     CardCreate,
     ProfileBackgroundCreate,
     UniverseCreate,
@@ -71,6 +72,70 @@ async def start_card_create(message: Message, state: FSMContext):
     await message.answer(
         card_wizard_text("название", {}), reply_markup=admin_wizard_markup("cards")
     )
+
+
+async def start_admin_player_card_edit(
+    message: Message, state: FSMContext, mode: str
+):
+    """Start the admin flow for granting or revoking a player's card."""
+
+    await state.clear()
+    await state.set_state(AdminPlayerCardEdit.player_id)
+    await state.update_data(mode=mode)
+    title = "➕ <b>Выдать карту игроку</b>" if mode == "add" else "➖ <b>Забрать карту у игрока</b>"
+    await message.answer(
+        f"{title}\nВведи ID игрока.",
+        reply_markup=admin_wizard_markup("cards"),
+    )
+
+
+async def capture_admin_player_card_player_id(message: Message, state: FSMContext):
+    """Store the target player id and ask for the template id."""
+
+    player_id = _parse_int(message.text or "0", "player id", positive=True)
+    await state.update_data(player_id=player_id)
+    await state.set_state(AdminPlayerCardEdit.template_id)
+    await message.answer(
+        "Введи ID шаблона карты.",
+        reply_markup=admin_wizard_markup("cards"),
+    )
+
+
+async def capture_admin_player_card_template_id(
+    message: Message, services, state: FSMContext
+):
+    """Grant or revoke the selected card template for the selected player."""
+
+    data = await state.get_data()
+    player_id = data.get("player_id")
+    if not isinstance(player_id, int):
+        await state.clear()
+        return await message.answer("❌ player id is missing")
+    template_id = _parse_int(message.text or "0", "template id", positive=True)
+    try:
+        if data.get("mode") == "remove":
+            card = await services.remove_card_from_player(player_id, template_id)
+            notice = (
+                f"✅ У игрока <code>{player_id}</code> списана карта шаблона "
+                f"<code>{template_id}</code>."
+            )
+            if card.copies_owned > 1:
+                notice = (
+                    f"✅ У игрока <code>{player_id}</code> уменьшены копии карты "
+                    f"шаблона <code>{template_id}</code> до <code>{card.copies_owned}</code>."
+                )
+        else:
+            card = await services.grant_card_to_player(player_id, template_id)
+            notice = (
+                f"✅ Игроку <code>{player_id}</code> выдана карта шаблона "
+                f"<code>{template_id}</code>. Копий: <code>{card.copies_owned}</code>."
+            )
+    except (DomainError, ValidationError, ValueError) as error:
+        await state.clear()
+        return await message.answer(f"❌ {error}")
+    await state.clear()
+    await message.answer(notice)
+    await show_admin(message, services, "cards")
 
 
 async def card_name(message: Message, state: FSMContext, services=None):
@@ -272,6 +337,8 @@ async def standard_cards_remove(message: Message, services, state: FSMContext):
 
 
 __all__ = [
+    "capture_admin_player_card_player_id",
+    "capture_admin_player_card_template_id",
     "card_ability_cooldown",
     "card_ability_cost",
     "card_ability_effects",
@@ -284,6 +351,7 @@ __all__ = [
     "capture_universe_add",
     "capture_universe_remove",
     "profile_background_media",
+    "start_admin_player_card_edit",
     "standard_cards_add",
     "standard_cards_remove",
     "start_card_create",

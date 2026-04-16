@@ -450,6 +450,49 @@ class ContentAdminServiceMixin:
         await self.players.save(player)
         return descriptions
 
+    async def grant_card_to_player(
+        self, telegram_id: int, template_id: int
+    ) -> PlayerCard:
+        """Grant one card template to a player by Telegram id."""
+
+        player = await self.get_or_create_player(telegram_id)
+        template = await self.get_template(template_id)
+        if template is None:
+            raise EntityNotFoundError("card template not found")
+        card = await self._grant_template_to_player(player, template)
+        await self.players.save(player)
+        return card
+
+    async def remove_card_from_player(
+        self, telegram_id: int, template_id: int
+    ) -> PlayerCard:
+        """Remove one owned copy of a template from a player by Telegram id."""
+
+        player = await self.get_player(telegram_id)
+        if player is None:
+            raise EntityNotFoundError("player not found")
+        template = await self.get_template(template_id)
+        if template is None:
+            raise EntityNotFoundError("card template not found")
+        owned_cards = await self.player_cards.list_by_owner(player.telegram_id)
+        for card in owned_cards:
+            if card.template_id != template_id:
+                continue
+            if card.copies_owned > 1:
+                card.copies_owned -= 1
+                await self.player_cards.save(card)
+                return card
+            await self.player_cards.delete(card.id)
+            player.collection_count = len(
+                await self.player_cards.list_by_owner(player.telegram_id)
+            )
+            self._remove_card_ids_from_player_deck(player, {card.id})
+            self._remove_card_ids_from_deck_drafts({card.id})
+            await self.players.save(player)
+            self._persist_runtime_state()
+            return card
+        raise EntityNotFoundError("player card not found")
+
     async def _grant_template_to_player(
         self, player: Player, template: CardTemplate
     ) -> PlayerCard:

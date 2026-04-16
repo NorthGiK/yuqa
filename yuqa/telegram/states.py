@@ -33,6 +33,13 @@ class CardDelete(StatesGroup):
     item_id = State()
 
 
+class AdminPlayerCardEdit(StatesGroup):
+    """Grant or revoke a card for a player by id."""
+
+    player_id = State()
+    template_id = State()
+
+
 class BannerCreate(StatesGroup):
     """Collect banner data step by step."""
 

@@ -29,6 +29,8 @@ from yuqa.telegram.compat import CallbackQuery, FSMContext, Message, User
 from yuqa.telegram.config import Settings
 from yuqa.telegram.router import (
     build_router,
+    capture_admin_player_card_player_id,
+    capture_admin_player_card_template_id,
     card_ability_cost,
     card_ability_cooldown,
     card_ability_effects,
@@ -40,11 +42,12 @@ from yuqa.telegram.router import (
     capture_clan_icon,
     capture_clan_name,
     capture_free_rewards_edit,
+    start_admin_player_card_edit,
     start_card_create,
     start_clan_creation,
     start_free_rewards_edit,
 )
-from yuqa.telegram.states import CardCreate
+from yuqa.telegram.states import AdminPlayerCardEdit, CardCreate
 from yuqa.telegram.services import TelegramServices
 
 
@@ -160,6 +163,113 @@ async def test_standard_cards_only_affect_new_players() -> None:
 
     assert len(await services.list_player_cards(new_player.telegram_id)) == 1
     assert await services.list_player_cards(old_player.telegram_id) == []
+
+
+@pytest.mark.asyncio
+async def test_admin_can_grant_and_revoke_card_by_player_id() -> None:
+    """Admin card flow should add and remove a template for a specific player id."""
+
+    services = TelegramServices()
+    template = await services.create_card_template(
+        name="Админка",
+        universe=Universe.ORIGINAL,
+        rarity=Rarity.COMMON,
+        image_key="admin.png",
+        card_class=CardClass.SUPPORT,
+        base_stats=StatBlock(1, 1, 1),
+        ascended_stats=StatBlock(2, 2, 2),
+        ability=Ability(0, 0),
+    )
+    state = FSMContext()
+    admin = User(1)
+
+    await start_admin_player_card_edit(
+        Message(from_user=admin, text="/admin"), state, "add"
+    )
+    assert state.state == AdminPlayerCardEdit.player_id
+
+    await capture_admin_player_card_player_id(
+        Message(from_user=admin, text="42"), state
+    )
+    assert state.state == AdminPlayerCardEdit.template_id
+
+    await capture_admin_player_card_template_id(
+        Message(from_user=admin, text=str(template.id)), services, state
+    )
+    cards = await services.list_player_cards(42)
+    assert len(cards) == 1
+    assert cards[0].template_id == template.id
+
+    await start_admin_player_card_edit(
+        Message(from_user=admin, text="/admin"), state, "remove"
+    )
+    await capture_admin_player_card_player_id(
+        Message(from_user=admin, text="42"), state
+    )
+    await capture_admin_player_card_template_id(
+        Message(from_user=admin, text=str(template.id)), services, state
+    )
+    assert await services.list_player_cards(42) == []
+
+
+@pytest.mark.asyncio
+async def test_remove_card_from_player_cleans_deck_and_draft_for_last_copy() -> None:
+    """Revoking the last owned copy should clean the saved deck and draft."""
+
+    services = TelegramServices()
+    removed_template = await services.create_card_template(
+        name="Убираем",
+        universe=Universe.ORIGINAL,
+        rarity=Rarity.COMMON,
+        image_key="remove.png",
+        card_class=CardClass.MELEE,
+        base_stats=StatBlock(1, 2, 3),
+        ascended_stats=StatBlock(4, 5, 6),
+        ability=Ability(0, 0),
+    )
+    kept_template = await services.create_card_template(
+        name="Оставляем",
+        universe=Universe.ORIGINAL,
+        rarity=Rarity.RARE,
+        image_key="keep.png",
+        card_class=CardClass.TANK,
+        base_stats=StatBlock(2, 3, 4),
+        ascended_stats=StatBlock(5, 6, 7),
+        ability=Ability(0, 0),
+    )
+
+    player = await services.get_or_create_player(77)
+    removed_card = await services.grant_card_to_player(player.telegram_id, removed_template.id)
+    kept_cards = []
+    for _ in range(4):
+        kept_cards.append(
+            await services.grant_card_to_player(player.telegram_id, kept_template.id)
+        )
+
+    kept_ids = {card.id for card in kept_cards}
+    assert len(kept_ids) == 1
+    extra_cards = []
+    for card_id in (300, 301, 302, 303):
+        extra = PlayerCard(
+            id=card_id,
+            owner_player_id=player.telegram_id,
+            template_id=kept_template.id,
+            level=1,
+            copies_owned=1,
+            current_form=CardForm.BASE,
+        )
+        await services.player_cards.add(extra)
+        extra_cards.append(extra)
+    player.collection_count = 5
+    deck_ids = (removed_card.id, *(card.id for card in extra_cards))
+    player.battle_deck = DeckSlots(deck_ids)
+    services.deck_drafts[player.telegram_id] = list(deck_ids)
+
+    await services.remove_card_from_player(player.telegram_id, removed_template.id)
+
+    assert player.battle_deck is None
+    assert services.deck_drafts[player.telegram_id] == [card.id for card in extra_cards]
+    assert all(card.template_id == kept_template.id for card in await services.list_player_cards(player.telegram_id))
 
 
 @pytest.mark.asyncio

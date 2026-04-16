@@ -26,6 +26,8 @@ from yuqa.telegram.router_wizards_banners import (
     banner_start_at,
 )
 from yuqa.telegram.router_wizards_cards import (
+    capture_admin_player_card_player_id,
+    capture_admin_player_card_template_id,
     card_ability_cooldown,
     card_ability_cost,
     card_ability_effects,
@@ -37,6 +39,7 @@ from yuqa.telegram.router_wizards_cards import (
     capture_universe_add,
     capture_universe_remove,
     profile_background_media,
+    start_admin_player_card_edit,
     start_card_create,
     start_universe_create,
     start_universe_delete,
@@ -83,6 +86,8 @@ __all__ = [
     "banner_name",
     "banner_start_at",
     "build_router",
+    "capture_admin_player_card_player_id",
+    "capture_admin_player_card_template_id",
     "cancel_battle_search",
     "card_ability_cooldown",
     "card_ability_cost",
@@ -128,6 +133,7 @@ __all__ = [
     "start_admin_player_edit",
     "start_battle",
     "start_battle_pass_level_create",
+    "start_admin_player_card_edit",
     "start_card_create",
     "start_clan_creation",
     "start_free_rewards_edit",

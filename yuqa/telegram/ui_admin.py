@@ -13,6 +13,8 @@ def admin_markup(section: str = "dashboard") -> InlineKeyboardMarkup:
             [
                 ("➕ Создать карту", AdminCallback(action="create_card")),
                 ("🗑 Удалить карту", AdminCallback(action="delete_card")),
+                ("🎁 Выдать игроку", AdminCallback(action="player_add_card")),
+                ("↩️ Забрать у игрока", AdminCallback(action="player_remove_card")),
                 (
                     "🖼 Фоны профиля",
                     AdminCallback(action="section", value="profile_backgrounds"),
@@ -22,7 +24,7 @@ def admin_markup(section: str = "dashboard") -> InlineKeyboardMarkup:
                 ("🏠 Панель", AdminCallback(action="section", value="dashboard")),
                 ("⬅️ Назад", MenuCallback(section="home")),
             ],
-            (2, 2, 2),
+            (2, 2, 2, 2),
         )
     if section == "profile_backgrounds":
         return _markup(

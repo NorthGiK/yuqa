@@ -198,7 +198,7 @@ if _Router is None:
         def button(self, text):
             self._buttons.append(KeyboardButton(text=text))
 
-        def adjust(self, *sizes):
+        def adjust(self, *sizes: int):
             self._sizes = list(sizes)
 
         def as_markup(

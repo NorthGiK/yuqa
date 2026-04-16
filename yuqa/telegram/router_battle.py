@@ -31,8 +31,9 @@ async def start_battle(message: Message, services, command: CommandObject):
         + battle_status_text(
             battle,
             message.from_user.id,
-            opponent_action_points=summary.opponent_action_points,
+            opponent_spent_action_points=summary.opponent_spent_action_points,
             available_action_points=summary.available_action_points,
+            total_action_points=summary.total_action_points,
             attack_count=summary.attack_count,
             block_count=summary.block_count,
             bonus_count=summary.bonus_count,
@@ -43,6 +44,7 @@ async def start_battle(message: Message, services, command: CommandObject):
             ability_cost=summary.ability_cost,
             can_use_ability=(
                 not summary.ability_used
+                and summary.ability_cooldown_remaining <= 0
                 and summary.available_action_points >= summary.ability_cost
             ),
         ),
@@ -71,8 +73,9 @@ async def search_battle(event, services, player_id: int, bot=None):
         + battle_status_text(
             battle,
             player_id,
-            opponent_action_points=summary.opponent_action_points,
+            opponent_spent_action_points=summary.opponent_spent_action_points,
             available_action_points=summary.available_action_points,
+            total_action_points=summary.total_action_points,
             attack_count=summary.attack_count,
             block_count=summary.block_count,
             bonus_count=summary.bonus_count,
@@ -83,6 +86,7 @@ async def search_battle(event, services, player_id: int, bot=None):
             ability_cost=summary.ability_cost,
             can_use_ability=(
                 not summary.ability_used
+                and summary.ability_cooldown_remaining <= 0
                 and summary.available_action_points >= summary.ability_cost
             ),
         ),
@@ -101,8 +105,9 @@ async def search_battle(event, services, player_id: int, bot=None):
             + battle_status_text(
                 battle,
                 other_id,
-                opponent_action_points=opponent_summary.opponent_action_points,
+                opponent_spent_action_points=opponent_summary.opponent_spent_action_points,
                 available_action_points=opponent_summary.available_action_points,
+                total_action_points=opponent_summary.total_action_points,
                 attack_count=opponent_summary.attack_count,
                 block_count=opponent_summary.block_count,
                 bonus_count=opponent_summary.bonus_count,
@@ -113,6 +118,7 @@ async def search_battle(event, services, player_id: int, bot=None):
                 ability_cost=opponent_summary.ability_cost,
                 can_use_ability=(
                     not opponent_summary.ability_used
+                    and opponent_summary.ability_cooldown_remaining <= 0
                     and opponent_summary.available_action_points
                     >= opponent_summary.ability_cost
                 ),

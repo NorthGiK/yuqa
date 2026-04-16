@@ -26,6 +26,7 @@ from yuqa.telegram.compat import (
     TelegramBadRequest,
     User,
 )
+from yuqa.telegram.callbacks import BattleCallback
 from yuqa.telegram.reply import safe_edit, send_card_preview
 from yuqa.telegram.router import (
     build_router,
@@ -84,6 +85,22 @@ def _button_texts(markup) -> set[str]:
             else:
                 texts.add(button[0])
     return texts
+
+
+class _CallbackWithBot:
+    """Tiny callback stand-in that also exposes a bot attribute."""
+
+    def __init__(self, from_user, message, bot):
+        self.from_user = from_user
+        self.message = message
+        self.bot = bot
+        self.answered_text = None
+        self.alert = False
+
+    async def answer(self, text=None, show_alert=False, **_: object):
+        self.answered_text = text
+        self.alert = show_alert
+        return None
 
 
 @pytest.mark.asyncio
@@ -275,6 +292,7 @@ async def test_show_battle_renders_status_and_round_actions() -> None:
 
     assert message.text is not None
     assert "Колода Оппонента" in message.text
+    assert "Потрачено ОД в раунде" in message.text
     assert "Текущий выбор" in message.text
     buttons = _button_texts(message.reply_markup)
     assert "⚔️Атака" in buttons
@@ -461,6 +479,189 @@ async def test_battle_markup_switches_between_search_and_cancel() -> None:
     assert "🔍 Поиск соперника" in _button_texts(battle_markup(False))
     assert "⏳ Отменить поиск" in _button_texts(battle_markup(True))
     assert "🧱 Конструктор колоды" in _button_texts(battle_markup(False))
+
+
+@pytest.mark.asyncio
+async def test_battle_click_does_not_push_new_status_to_opponent() -> None:
+    """A player's click should not send an extra battle status message to the opponent."""
+
+    services = TelegramServices()
+    template = CardTemplate(
+        id=1,
+        name="Рейна",
+        universe=Universe.ORIGINAL,
+        rarity=Rarity.EPIC,
+        image=ImageRef("reina.png"),
+        card_class=CardClass.MELEE,
+        base_stats=StatBlock(10, 20, 5),
+        ascended_stats=StatBlock(15, 25, 8),
+        ability=Ability(cost=0, cooldown=0),
+    )
+    await services.card_templates.add(template)
+    for player_id in (1, 2):
+        player = await services.get_or_create_player(player_id)
+        player.battle_deck = DeckSlots(
+            (
+                player_id * 10 + 1,
+                player_id * 10 + 2,
+                player_id * 10 + 3,
+                player_id * 10 + 4,
+                player_id * 10 + 5,
+            )
+        )
+        for card_id in player.battle_deck.card_ids:
+            await services.player_cards.add(
+                PlayerCard(id=card_id, owner_player_id=player_id, template_id=1)
+            )
+
+    router = build_router(services, SimpleNamespace(admin_ids=set()))
+    if hasattr(router, "observers"):
+        battle_actions = next(
+            handler.callback
+            for handler in router.observers["callback_query"].handlers
+            if handler.callback.__name__ == "battle_actions"
+        )
+    else:
+        battle_actions = next(
+            callback
+            for event_type, _filters, callback in router.handlers
+            if event_type == "callback_query" and callback.__name__ == "battle_actions"
+        )
+    await services.start_battle(1, 2)
+
+    callback = CallbackQuery(from_user=User(1), message=Message(text="old"))
+
+    from yuqa.telegram.callbacks import BattleCallback
+
+    await battle_actions(callback, BattleCallback(action="attack"))
+
+    assert callback.message.text is not None
+    assert "Текущий выбор" in callback.message.text
+
+
+@pytest.mark.asyncio
+async def test_battle_round_resolution_pushes_one_update_to_opponent() -> None:
+    """The opponent should get one new status message only after the round resolves."""
+
+    services = TelegramServices()
+    template = CardTemplate(
+        id=1,
+        name="Рейна",
+        universe=Universe.ORIGINAL,
+        rarity=Rarity.EPIC,
+        image=ImageRef("reina.png"),
+        card_class=CardClass.MELEE,
+        base_stats=StatBlock(10, 20, 5),
+        ascended_stats=StatBlock(15, 25, 8),
+        ability=Ability(cost=0, cooldown=0),
+    )
+    await services.card_templates.add(template)
+    for player_id in (1, 2):
+        player = await services.get_or_create_player(player_id)
+        player.battle_deck = DeckSlots(
+            (
+                player_id * 10 + 1,
+                player_id * 10 + 2,
+                player_id * 10 + 3,
+                player_id * 10 + 4,
+                player_id * 10 + 5,
+            )
+        )
+        for card_id in player.battle_deck.card_ids:
+            await services.player_cards.add(
+                PlayerCard(id=card_id, owner_player_id=player_id, template_id=1)
+            )
+
+    router = build_router(services, SimpleNamespace(admin_ids=set()))
+    if hasattr(router, "observers"):
+        battle_actions = next(
+            handler.callback
+            for handler in router.observers["callback_query"].handlers
+            if handler.callback.__name__ == "battle_actions"
+        )
+    else:
+        battle_actions = next(
+            callback
+            for event_type, _filters, callback in router.handlers
+            if event_type == "callback_query" and callback.__name__ == "battle_actions"
+        )
+    battle = await services.start_battle(1, 2)
+
+    bot = SimpleNamespace(send_message=AsyncMock())
+    callback = _CallbackWithBot(from_user=User(1), message=Message(text="old"), bot=bot)
+
+    battle = await services.record_battle_action(battle.player_two_id, "attack")
+    await battle_actions(callback, BattleCallback(action="attack"))
+
+    bot.send_message.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_stale_battle_button_recovers_to_battle_screen_instead_of_notice() -> None:
+    """A stale battle callback should reopen the current battle screen, not show an alert."""
+
+    services = TelegramServices()
+    template = CardTemplate(
+        id=1,
+        name="Рейна",
+        universe=Universe.ORIGINAL,
+        rarity=Rarity.EPIC,
+        image=ImageRef("reina.png"),
+        card_class=CardClass.MELEE,
+        base_stats=StatBlock(10, 20, 5),
+        ascended_stats=StatBlock(15, 25, 8),
+        ability=Ability(cost=0, cooldown=0),
+    )
+    await services.card_templates.add(template)
+    for player_id in (1, 2):
+        player = await services.get_or_create_player(player_id)
+        player.battle_deck = DeckSlots(
+            (
+                player_id * 10 + 1,
+                player_id * 10 + 2,
+                player_id * 10 + 3,
+                player_id * 10 + 4,
+                player_id * 10 + 5,
+            )
+        )
+        for card_id in player.battle_deck.card_ids:
+            await services.player_cards.add(
+                PlayerCard(id=card_id, owner_player_id=player_id, template_id=1)
+            )
+
+    router = build_router(services, SimpleNamespace(admin_ids=set()))
+    if hasattr(router, "observers"):
+        battle_actions = next(
+            handler.callback
+            for handler in router.observers["callback_query"].handlers
+            if handler.callback.__name__ == "battle_actions"
+        )
+    else:
+        battle_actions = next(
+            callback
+            for event_type, _filters, callback in router.handlers
+            if event_type == "callback_query" and callback.__name__ == "battle_actions"
+        )
+    await services.start_battle(1, 2)
+
+    original_get_active_battle = services.get_active_battle
+    call_count = 0
+
+    async def flaky_get_active_battle(player_id: int):
+        nonlocal call_count
+        call_count += 1
+        if call_count == 1:
+            return None
+        return await original_get_active_battle(player_id)
+
+    services.get_active_battle = flaky_get_active_battle
+    callback = CallbackQuery(from_user=User(1), message=Message(text="old"))
+
+    await battle_actions(callback, BattleCallback(action="attack"))
+
+    assert callback.message.text is not None
+    assert "Колода Оппонента" in callback.message.text
+    assert callback.answered_text is None
 
 
 def test_admin_banner_markup_has_delete_button_only_when_editable() -> None:

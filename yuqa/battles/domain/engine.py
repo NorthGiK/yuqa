@@ -81,13 +81,17 @@ class BattleEngine:
 
         side = battle.side_for(player_id)
         side.ensure_active_alive()
+        bonus_count = sum(
+            1 for action in actions if action.action_type == BattleActionType.BONUS
+        )
+        round_ap = self._round_ap(battle.current_round) + bonus_count
         spent_ap = 0
         used_ability = False
         switched = False
         for action in actions:
             if action.ap_cost < 0 or action.ap_cost > 5:
                 raise ValidationError("ap_cost must be between 0 and 5")
-            if spent_ap + action.ap_cost > self._round_ap(battle.current_round):
+            if spent_ap + action.ap_cost > round_ap:
                 raise BattleRuleViolationError("cannot spend more AP than available")
             if action.action_type == BattleActionType.BONUS:
                 spent_ap += action.ap_cost
@@ -189,11 +193,14 @@ class BattleEngine:
         active = side.active_card()
         if active.player_card_id != player_card_id:
             raise BattleRuleViolationError("ability can only be used by active card")
+        if not active.ability_available():
+            raise BattleRuleViolationError("ability is on cooldown")
         ability = active.template.ability_for(active.form)
         if ability.cost > ap_cost:
             raise BattleRuleViolationError(
                 "Не достаточно Очков Действия для способности"
             )
+        active.ability_cooldown_remaining = ability.cooldown + 1
         for effect in ability.effects:
             self._apply_effect(battle, player_id, effect, log)
 
@@ -247,6 +254,8 @@ class BattleEngine:
         battle.pending_enemy_effects.clear()
         for side in (battle.player_one_side, battle.player_two_side):
             for card in side.cards.values():
+                if card.ability_cooldown_remaining > 0:
+                    card.ability_cooldown_remaining -= 1
                 for modifier in card.effect_modifiers:
                     modifier.remaining_rounds -= 1
                 card.effect_modifiers = [
@@ -271,8 +280,14 @@ class BattleEngine:
     def _finish_if_needed(battle: Battle) -> None:
         """Finish the battle when one side has no surviving cards."""
 
-        p1_alive = any(card.alive for card in battle.player_one_side.cards.values())
-        p2_alive = any(card.alive for card in battle.player_two_side.cards.values())
+        p1_alive = any(
+            card.alive and card.current_health > 0
+            for card in battle.player_one_side.cards.values()
+        )
+        p2_alive = any(
+            card.alive and card.current_health > 0
+            for card in battle.player_two_side.cards.values()
+        )
         if p1_alive and p2_alive:
             return
         battle.status = BattleStatus.FINISHED

@@ -658,7 +658,9 @@ def _register_public_callbacks(router: Router, services, settings) -> None:
         player_id = callback.from_user.id
         battle = await services.get_active_battle(player_id)
         if battle is None:
-            return await send_notice(callback, "Бой не найден")
+            return await show_battle(callback, services, player_id)
+        previous_round = battle.current_round
+        previous_status = battle.status.value
         try:
             if callback_data.action == "back":
                 return await show_battle_round(
@@ -680,41 +682,48 @@ def _register_public_callbacks(router: Router, services, settings) -> None:
                 battle = await services.record_battle_action(player_id, "ability")
             else:
                 return await callback.answer()
+        except EntityNotFoundError:
+            return await show_battle(callback, services, player_id)
         except (DomainError, ValidationError, BattleRuleViolationError) as error:
             return await send_alert(callback, f"⛔️ {error}")
 
         await show_battle_round(callback, services, player_id, battle=battle)
-        bot = getattr(callback, "bot", None)
-        if bot is None or not hasattr(bot, "send_message"):
-            return
-        other_id = (
-            battle.player_two_id
-            if battle.player_one_id == player_id
-            else battle.player_one_id
-        )
-        opponent_summary = services.battle_round_summary(battle, other_id)
-        await bot.send_message(
-            other_id,
-            battle_status_text(
-                battle,
-                other_id,
-                opponent_action_points=opponent_summary.opponent_action_points,
-                available_action_points=opponent_summary.available_action_points,
-                attack_count=opponent_summary.attack_count,
-                block_count=opponent_summary.block_count,
-                bonus_count=opponent_summary.bonus_count,
-                ability_used=opponent_summary.ability_used,
-            ),
-            reply_markup=battle_actions_markup(
-                can_switch=opponent_summary.can_switch,
-                ability_cost=opponent_summary.ability_cost,
-                can_use_ability=(
-                    not opponent_summary.ability_used
-                    and opponent_summary.available_action_points
-                    >= opponent_summary.ability_cost
-                ),
-            ),
-        )
+        if battle.current_round != previous_round or battle.status.value != previous_status:
+            bot = getattr(callback, "bot", None)
+            if bot is not None and hasattr(bot, "send_message"):
+                other_id = (
+                    battle.player_two_id
+                    if battle.player_one_id == player_id
+                    else battle.player_one_id
+                )
+                opponent_summary = services.battle_round_summary(battle, other_id)
+                await bot.send_message(
+                    other_id,
+                    battle_status_text(
+                        battle,
+                        other_id,
+                        opponent_spent_action_points=opponent_summary.opponent_spent_action_points,
+                        available_action_points=opponent_summary.available_action_points,
+                        total_action_points=opponent_summary.total_action_points,
+                        attack_count=opponent_summary.attack_count,
+                        block_count=opponent_summary.block_count,
+                        bonus_count=opponent_summary.bonus_count,
+                        ability_used=opponent_summary.ability_used,
+                    ),
+                    reply_markup=battle_actions_markup(
+                        can_switch=opponent_summary.can_switch,
+                        ability_cost=opponent_summary.ability_cost,
+                        can_use_ability=(
+                            not opponent_summary.ability_used
+                            and opponent_summary.ability_cooldown_remaining <= 0
+                            and opponent_summary.available_action_points
+                            >= opponent_summary.ability_cost
+                        ),
+                    )
+                    if battle.status.value == "active"
+                    and opponent_summary.available_action_points > 0
+                    else None,
+                )
 
     @router.callback_query(BattlePassCallback.filter())
     async def battle_pass_actions(

@@ -389,8 +389,9 @@ async def show_battle_round(
     text = battle_status_text(
         battle,
         player_id,
-        opponent_action_points=summary.opponent_action_points,
+        opponent_spent_action_points=summary.opponent_spent_action_points,
         available_action_points=summary.available_action_points,
+        total_action_points=summary.total_action_points,
         attack_count=summary.attack_count,
         block_count=summary.block_count,
         bonus_count=summary.bonus_count,
@@ -405,6 +406,7 @@ async def show_battle_round(
             ability_cost=summary.ability_cost,
             can_use_ability=(
                 not summary.ability_used
+                and summary.ability_cooldown_remaining <= 0
                 and summary.available_action_points >= summary.ability_cost
             ),
         )
@@ -428,8 +430,9 @@ async def show_battle_switch(event, services, player_id: int):
         battle_status_text(
             battle,
             player_id,
-            opponent_action_points=summary.opponent_action_points,
+            opponent_spent_action_points=summary.opponent_spent_action_points,
             available_action_points=summary.available_action_points,
+            total_action_points=summary.total_action_points,
             attack_count=summary.attack_count,
             block_count=summary.block_count,
             bonus_count=summary.bonus_count,

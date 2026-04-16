@@ -29,6 +29,7 @@ class BattleCardState:
     damage: int
     defense: int
     alive: bool = True
+    ability_cooldown_remaining: int = 0
     effect_modifiers: list[StatModifier] = field(default_factory=list)
 
     def recalc(self) -> None:
@@ -51,6 +52,12 @@ class BattleCardState:
         self.defense = max(0, defense)
         self.max_health = max(1, health)
         self.current_health = min(self.current_health, self.max_health)
+        self.alive = self.current_health > 0
+
+    def ability_available(self) -> bool:
+        """Return True when the card can use its ability this round."""
+
+        return self.alive and self.ability_cooldown_remaining <= 0
 
 
 @dataclass(slots=True)
@@ -64,7 +71,7 @@ class BattleSide:
     def alive_cards(self) -> list[BattleCardState]:
         """Return all surviving cards."""
 
-        return [card for card in self.cards.values() if card.alive]
+        return [card for card in self.cards.values() if card.alive and card.current_health > 0]
 
     def active_card(self) -> BattleCardState:
         """Return the currently active card."""
@@ -74,6 +81,10 @@ class BattleSide:
     def ensure_active_alive(self) -> None:
         """Pick the first alive card when the active one is dead."""
 
+        if self.active_card_id in self.cards:
+            self.cards[self.active_card_id].alive = (
+                self.cards[self.active_card_id].current_health > 0
+            )
         if (
             self.active_card_id not in self.cards
             or not self.cards[self.active_card_id].alive

@@ -45,8 +45,9 @@ def battle_status_text(
     battle: Battle,
     player_id: int,
     *,
-    opponent_action_points: int,
+    opponent_spent_action_points: int,
     available_action_points: int,
+    total_action_points: int,
     attack_count: int,
     block_count: int,
     bonus_count: int,
@@ -61,6 +62,7 @@ def battle_status_text(
             card, active=card.player_card_id == opponent_side.active_card_id
         )
         for card in opponent_side.cards.values()
+        if card.alive
     )
     player_cards = "\n".join(
         _battle_card_line(
@@ -70,10 +72,10 @@ def battle_status_text(
     )
     return (
         "🪖Колода Оппонента:\n"
-        f"Очки действия {opponent_action_points}\n"
+        f"Потрачено ОД в раунде {opponent_spent_action_points}\n"
         f"{opponent_cards}\n\n"
         "🫪Твоя Колода:\n"
-        f"Очки действия {available_action_points}\n"
+        f"Очки действия {available_action_points}/{total_action_points}\n"
         f"{player_cards}\n\n"
         "Текущий выбор:\n"
         f"⚔️ {attack_count}\n"

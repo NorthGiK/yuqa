@@ -1,5 +1,6 @@
 """Orchestration layer used by Telegram handlers."""
 
+import asyncio
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from random import Random
@@ -179,6 +180,13 @@ class TelegramServices(
             self.store.action_events if self.store is not None else []
         )
         self.battle_action_drafts: dict[tuple[int, int, int], list[BattleAction]] = {}
+        self.battle_round_started_at: dict[int, datetime] = {}
+        self.battle_timeout_tasks: dict[int, asyncio.Task] = {}
+        self.battle_inactive_rounds: dict[tuple[int, int], int] = {}
+        self.battle_round_timeout_seconds = 15.0
+        self.battle_inactive_round_limit = 15
+        self.enable_background_battle_timers = False
+        self.battle_timeout_notifier = None
         self.rng = Random()
         self.ideas = (
             PersistentIdeaRepository(self.store)
@@ -236,6 +244,12 @@ class TelegramServices(
         await self.flush()
         if self.store is not None:
             self.store.close()
+
+    def configure_battle_timeout_notifier(self, notifier) -> None:
+        """Enable automatic round timers and use a notifier for timeout updates."""
+
+        self.battle_timeout_notifier = notifier
+        self.enable_background_battle_timers = True
 
     async def admin_counts(self) -> dict[str, int]:
         """Return a small admin dashboard snapshot."""

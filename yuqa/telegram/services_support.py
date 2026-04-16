@@ -12,8 +12,10 @@ class BattleRoundSummary:
     bonus_count: int
     ability_used: bool
     available_action_points: int
-    opponent_action_points: int
+    total_action_points: int
+    opponent_spent_action_points: int
     ability_cost: int
+    ability_cooldown_remaining: int
     can_switch: bool
 
 

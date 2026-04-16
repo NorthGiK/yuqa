@@ -1,5 +1,9 @@
 """Battle and matchmaking operations for TelegramServices."""
 
+import asyncio
+from contextlib import suppress
+from datetime import datetime, timezone
+
 from yuqa.battles.domain.actions import (
     AttackAction,
     BattleAction,
@@ -22,6 +26,12 @@ from yuqa.telegram.services_support import BattleRoundSummary, _next_id
 class BattleServiceMixin:
     """Battle creation, round drafting, and matchmaking helpers."""
 
+    @staticmethod
+    def _base_round_ap(round_number: int) -> int:
+        """Return the non-bonus action-point budget for the round."""
+
+        return min(5, round_number)
+
     async def start_battle(self, player_one_id: int, player_two_id: int) -> Battle:
         """Create and activate a new PvP battle."""
 
@@ -38,6 +48,7 @@ class BattleServiceMixin:
         )
         self.battle_engine.start_battle(battle)
         await self.battles.add(battle)
+        self._start_battle_round(battle)
         return battle
 
     async def get_active_battle(self, telegram_id: int) -> Battle | None:
@@ -93,8 +104,10 @@ class BattleServiceMixin:
                 ability_used = True
         active_card = battle.side_for(player_id).active_card()
         ability_cost = active_card.template.ability_for(active_card.form).cost
-        base_ap = min(5, battle.current_round)
-        available_action_points = max(0, base_ap - spent_ap)
+        ability_cooldown_remaining = active_card.ability_cooldown_remaining
+        base_ap = self._base_round_ap(battle.current_round)
+        total_action_points = base_ap + bonus_count
+        available_action_points = max(0, total_action_points - spent_ap)
         opponent_actions = self.battle_action_drafts.get(
             self._battle_round_key(
                 battle.id,
@@ -105,16 +118,18 @@ class BattleServiceMixin:
         )
         opponent_spent_ap = 0
         for action in opponent_actions:
-            opponent_spent_ap += action.ap_cost
-        opponent_action_points = max(0, base_ap - opponent_spent_ap)
+            if action.action_type != BattleActionType.BONUS:
+                opponent_spent_ap += action.ap_cost
         return BattleRoundSummary(
             attack_count=attack_count,
             block_count=block_count,
             bonus_count=bonus_count,
             ability_used=ability_used,
             available_action_points=available_action_points,
-            opponent_action_points=opponent_action_points,
+            total_action_points=total_action_points,
+            opponent_spent_action_points=opponent_spent_ap,
             ability_cost=ability_cost,
+            ability_cooldown_remaining=ability_cooldown_remaining,
             can_switch=not actions and available_action_points > 0,
         )
 
@@ -133,6 +148,18 @@ class BattleServiceMixin:
             for key, value in self.battle_action_drafts.items()
             if key[0] != battle_id
         }
+        self._cancel_battle_timeout_task(battle_id)
+        self.battle_round_started_at.pop(battle_id, None)
+
+    def _clear_battle_runtime_state(self, battle_id: int) -> None:
+        """Drop every runtime-only entry for a finished or deleted battle."""
+
+        self._clear_battle_round_drafts(battle_id)
+        self.battle_inactive_rounds = {
+            key: value
+            for key, value in self.battle_inactive_rounds.items()
+            if key[0] != battle_id
+        }
 
     def _clear_all_battles(self) -> None:
         """Remove every stored battle, queue entry, and round draft."""
@@ -142,8 +169,151 @@ class BattleServiceMixin:
         if self.search_queue:
             self.search_queue.clear()
         self.battle_action_drafts.clear()
+        for battle_id in list(self.battle_timeout_tasks):
+            self._cancel_battle_timeout_task(battle_id)
+        self.battle_round_started_at.clear()
+        self.battle_inactive_rounds.clear()
         if self.store is not None:
             self.store.save()
+
+    def _start_battle_round(self, battle: Battle) -> None:
+        """Remember the current round start and optionally schedule a timeout."""
+
+        self.battle_round_started_at[battle.id] = datetime.now(timezone.utc)
+        self._cancel_battle_timeout_task(battle.id)
+        if not self.enable_background_battle_timers:
+            return
+        self.battle_timeout_tasks[battle.id] = asyncio.create_task(
+            self._battle_round_timeout_worker(battle.id, battle.current_round)
+        )
+
+    def _cancel_battle_timeout_task(self, battle_id: int) -> None:
+        """Cancel the background timeout task for one battle."""
+
+        task = self.battle_timeout_tasks.pop(battle_id, None)
+        if task is not None:
+            task.cancel()
+
+    async def _battle_round_timeout_worker(
+        self, battle_id: int, round_number: int
+    ) -> None:
+        """Resolve one round after the configured timeout."""
+
+        try:
+            await asyncio.sleep(self.battle_round_timeout_seconds)
+            battle = await self.battles.get_by_id(battle_id)
+            if battle is None or battle.status.value != "active":
+                return
+            if battle.current_round != round_number:
+                return
+            battle = await self._resolve_current_round(
+                battle,
+                notify_timeout=False,
+            )
+            if (
+                battle.status.value == "active"
+                and self.battle_timeout_notifier is not None
+            ):
+                await self.battle_timeout_notifier(
+                    battle,
+                    reason="⌛ Время на раунд вышло. Новый раунд уже начался.",
+                )
+            elif self.battle_timeout_notifier is not None:
+                await self.battle_timeout_notifier(
+                    battle,
+                    reason="⌛ Время на раунд вышло. Бой завершён.",
+                )
+        except asyncio.CancelledError:
+            raise
+        finally:
+            task = self.battle_timeout_tasks.get(battle_id)
+            if task is asyncio.current_task():
+                self.battle_timeout_tasks.pop(battle_id, None)
+
+    async def _resolve_expired_round_if_needed(self, battle: Battle) -> Battle:
+        """Finish the current round immediately when its timer already expired."""
+
+        started_at = self.battle_round_started_at.get(battle.id)
+        if started_at is None or battle.status.value != "active":
+            return battle
+        elapsed = (datetime.now(timezone.utc) - started_at).total_seconds()
+        if elapsed < self.battle_round_timeout_seconds:
+            return battle
+        return await self._resolve_current_round(
+            battle,
+            notify_timeout=False,
+            reason="⌛ Время на раунд вышло. Раунд завершён автоматически.",
+        )
+
+    async def _resolve_current_round(
+        self,
+        battle: Battle,
+        *,
+        notify_timeout: bool,
+        reason: str | None = None,
+    ) -> Battle:
+        """Resolve the current round from drafted actions."""
+
+        actions_by_player = {
+            battle.player_one_id: list(
+                self.battle_action_drafts.get(
+                    self._battle_round_key(
+                        battle.id, battle.current_round, battle.player_one_id
+                    ),
+                    [],
+                )
+            ),
+            battle.player_two_id: list(
+                self.battle_action_drafts.get(
+                    self._battle_round_key(
+                        battle.id, battle.current_round, battle.player_two_id
+                    ),
+                    [],
+                )
+            ),
+        }
+        result = self.battle_engine.resolve_round(battle, actions_by_player)
+        self._apply_inactive_round_penalty(result.battle, actions_by_player)
+        self._clear_battle_round_drafts(result.battle.id)
+        await self.battles.save(result.battle)
+        if result.battle.status.value == "active":
+            self._start_battle_round(result.battle)
+        else:
+            self._clear_battle_runtime_state(result.battle.id)
+        if notify_timeout and self.battle_timeout_notifier is not None:
+            with suppress(Exception):
+                await self.battle_timeout_notifier(result.battle, reason=reason)
+        return result.battle
+
+    def _apply_inactive_round_penalty(
+        self, battle: Battle, actions_by_player: dict[int, list[BattleAction]]
+    ) -> None:
+        """Kill the active card after too many rounds without any attacks."""
+
+        punished_sides: list[BattleSide] = []
+        for player_id in (battle.player_one_id, battle.player_two_id):
+            attacked = any(
+                action.action_type == BattleActionType.ATTACK
+                for action in actions_by_player.get(player_id, [])
+            )
+            key = (battle.id, player_id)
+            if attacked:
+                self.battle_inactive_rounds[key] = 0
+                continue
+            streak = self.battle_inactive_rounds.get(key, 0) + 1
+            self.battle_inactive_rounds[key] = streak
+            if streak < self.battle_inactive_round_limit:
+                continue
+            side = battle.side_for(player_id)
+            active = side.active_card()
+            active.alive = False
+            active.current_health = 0
+            punished_sides.append(side)
+            self.battle_inactive_rounds[key] = 0
+        for side in punished_sides:
+            side.ensure_active_alive()
+        if punished_sides:
+            self.battle_engine._finish_if_needed(battle)
 
     async def record_battle_action(
         self,
@@ -157,6 +327,9 @@ class BattleServiceMixin:
         battle = await self.get_active_battle(player_id)
         if battle is None:
             raise EntityNotFoundError("battle not found")
+        battle = await self._resolve_expired_round_if_needed(battle)
+        if battle.status.value != "active":
+            return battle
         summary = self._battle_round_summary(battle, player_id)
         actions = self._battle_round_actions(battle.id, battle.current_round, player_id)
         if action == "switch" and actions:
@@ -172,7 +345,7 @@ class BattleServiceMixin:
                 raise BattleRuleViolationError("not enough action points")
             actions.append(BlockAction(action_type=BattleActionType.BLOCK, ap_cost=1))
         elif action == "bonus":
-            if summary.available_action_points < 1:
+            if summary.bonus_count >= self._base_round_ap(battle.current_round):
                 raise BattleRuleViolationError("not enough action points")
             actions.append(BonusAction(action_type=BattleActionType.BONUS, ap_cost=1))
         elif action == "ability":
@@ -180,6 +353,8 @@ class BattleServiceMixin:
                 raise BattleRuleViolationError(
                     "ability can be used only once per round"
                 )
+            if summary.ability_cooldown_remaining > 0:
+                raise BattleRuleViolationError("ability is on cooldown")
             if summary.available_action_points < summary.ability_cost:
                 raise BattleRuleViolationError(
                     "Не достаточно Очков Действия для способности"
@@ -221,28 +396,7 @@ class BattleServiceMixin:
             await self.battles.save(battle)
             return battle
 
-        actions_by_player = {
-            battle.player_one_id: list(
-                self.battle_action_drafts.get(
-                    self._battle_round_key(
-                        battle.id, battle.current_round, battle.player_one_id
-                    ),
-                    [],
-                )
-            ),
-            battle.player_two_id: list(
-                self.battle_action_drafts.get(
-                    self._battle_round_key(
-                        battle.id, battle.current_round, battle.player_two_id
-                    ),
-                    [],
-                )
-            ),
-        }
-        result = self.battle_engine.resolve_round(battle, actions_by_player)
-        self._clear_battle_round_drafts(battle.id)
-        await self.battles.save(result.battle)
-        return result.battle
+        return await self._resolve_current_round(battle, notify_timeout=False)
 
     async def search_battle(self, telegram_id: int) -> Battle | None:
         """Join the matchmaking queue and start a battle when possible."""

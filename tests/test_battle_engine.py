@@ -114,3 +114,34 @@ def test_battle_ap_rules_and_effects():
         battle, actions_by_player={killer: actions, 1 if killer == 2 else 2: []}
     )
     assert result.battle.current_round == 5
+
+
+def test_battle_engine_finishes_when_last_card_health_reaches_zero():
+    template = make_template()
+    battle = Battle(
+        id=3,
+        player_one_id=1,
+        player_two_id=2,
+        player_one_side=make_side(1, template, 500),
+        player_two_side=make_side(2, template, 600),
+    )
+    engine = BattleEngine()
+    engine.start_battle(battle)
+    finisher = battle.first_turn_player_id
+    loser = 2 if finisher == 1 else 1
+    loser_side = battle.side_for(loser)
+    for card in loser_side.cards.values():
+        card.current_health = 0
+        card.alive = True
+    loser_side.active_card_id = next(iter(loser_side.cards))
+
+    result = engine.resolve_round(
+        battle,
+        actions_by_player={
+            finisher: [AttackAction(action_type=BattleActionType.ATTACK, ap_cost=1)],
+            loser: [],
+        },
+    )
+
+    assert result.battle.status == BattleStatus.FINISHED
+    assert result.battle.winner_id == finisher

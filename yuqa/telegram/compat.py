@@ -155,7 +155,7 @@ if _Router is None:
         """Tiny reply keyboard stand-in."""
 
         keyboard: list[list[KeyboardButton]]
-        resize_keyboard: bool = False
+        resize_keyboard: bool = True
         one_time_keyboard: bool = False
         input_field_placeholder: str | None = None
         selective: bool = False
@@ -204,7 +204,7 @@ if _Router is None:
         def as_markup(
             self,
             *,
-            resize_keyboard: bool = False,
+            resize_keyboard: bool = True,
             one_time_keyboard: bool = False,
             input_field_placeholder: str | None = None,
             selective: bool = False,

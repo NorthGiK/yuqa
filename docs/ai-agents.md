@@ -1,44 +1,117 @@
 # AI Agent Guide
 
-## Fast path
+## One-Minute Read
+1. Run `make agent-summary`.
+2. Read `AGENTS.md`.
+3. Only open this file if you need the longer map or task-specific edit paths.
 
-1. Run `make agent-summary` to get a compact JSON map of the repository.
-2. Run `make agent-check` before and after edits to catch layer violations.
-3. For a runtime issue, start in `yuqa/main.py`, then follow into `yuqa/telegram/services.py` and `yuqa/telegram/router.py`.
-4. For feature rules, work inside `yuqa/<feature>/domain/`.
-5. For storage issues, inspect `yuqa/infrastructure/local.py` and `yuqa/infrastructure/sqlalchemy/repositories.py`.
+## Codebase Shape
+- `main.py` is only a launcher.
+- `yuqa/main.py` is the runtime bootstrap.
+- `yuqa/telegram/services.py` is the service container and storage selector.
+- `yuqa/telegram/services_battles.py` owns battle drafting, round resolution, and matchmaking.
+- `yuqa/telegram/services_battle_pass.py` owns battle pass seasons, levels, and progress.
+- `yuqa/telegram/services_players.py` owns player lookup, profiles, free rewards, and deck construction.
+- `yuqa/telegram/services_social.py` owns clans and ideas.
+- `yuqa/telegram/services_content.py` owns cards, banners, shop items, starter cards, and content-admin flows.
+- `yuqa/telegram/services_support.py` holds small shared service helpers.
+- `yuqa/telegram/router.py` owns handler registration and FSM flows.
+- `yuqa/telegram/router_views.py` owns reusable screens and admin section rendering.
+- `yuqa/telegram/router_helpers.py` owns parsing, pagination, and media extraction.
+- `yuqa/telegram/texts.py` is the compatibility facade for `texts_<family>.py`.
+- `yuqa/telegram/ui.py` is the compatibility facade for `ui_<family>.py`.
 
-## Stable architecture boundaries
+## Stable Boundaries
+- Domain packages in `yuqa/<feature>/domain/` must not import Telegram or infrastructure.
+- `yuqa/telegram/` is allowed to depend on domain and shared code.
+- `yuqa/infrastructure/` adapts storage and serialization only.
+- `yuqa/shared/` should stay dependency-light.
+- `yuqa/application/` must remain transport-agnostic.
 
-- `yuqa/<feature>/domain/` holds entities, repositories, and domain services.
-- `yuqa/telegram/` is the transport layer. Keep bot handlers, callbacks, texts, and UI here.
-- `yuqa/infrastructure/` is for adapters only.
-- `yuqa/shared/` should stay dependency-light and reusable across features.
+## Storage Modes
+- `TelegramServices()`:
+  Fastest path for tests and isolated logic work.
+- `TelegramServices(content_path=...)`:
+  JSON-backed catalog/runtime storage without SQLAlchemy.
+- `TelegramServices(content_path=..., database_url=...)`:
+  Persistent database-backed runtime with Alembic migrations.
 
-## Runtime shape
+## Task Playbooks
 
-- `main.py` is the CLI entrypoint.
-- `yuqa/main.py` loads settings, optionally applies migrations, builds services, and starts polling.
-- `TelegramServices` chooses one of three storage modes:
-  - memory: `TelegramServices()`
-  - JSON catalog: `TelegramServices(content_path=...)`
-  - database: `TelegramServices(content_path=..., database_url=...)`
+### Runtime Bug
+Open these files in order:
+1. `yuqa/main.py`
+2. `yuqa/telegram/services.py`
+3. `yuqa/telegram/services_battles.py`
+4. `yuqa/telegram/services_battle_pass.py`
+5. `yuqa/telegram/services_players.py`
+6. `yuqa/telegram/services_content.py`
+7. `yuqa/telegram/router.py`
+8. `yuqa/telegram/router_views.py`
+
+### New Domain Rule
+Open:
+1. `yuqa/<feature>/domain/entities.py`
+2. `yuqa/<feature>/domain/services.py`
+3. `yuqa/<feature>/domain/repositories.py`
+4. The matching test file in `tests/`
+
+### Telegram UI or Copy Change
+Open:
+1. `yuqa/telegram/router_views.py`
+2. `yuqa/telegram/texts.py`
+3. The matching `yuqa/telegram/texts_<family>.py`
+4. `yuqa/telegram/ui.py`
+5. The matching `yuqa/telegram/ui_<family>.py`
+4. `tests/test_telegram_layer.py`
+
+### Wizard or Handler Flow Change
+Open:
+1. `yuqa/telegram/router.py`
+2. `yuqa/telegram/states.py`
+3. `tests/test_router_wiring.py`
+4. `tests/test_telegram_services.py`
+
+### Persistence Bug
+Open:
+1. `yuqa/infrastructure/sqlalchemy/repositories.py`
+2. `yuqa/infrastructure/sqlalchemy/models.py`
+3. `yuqa/infrastructure/local.py`
+4. `tests/test_persistence.py`
 
 ## Hotspots
+- `yuqa/telegram/services.py`
+- `yuqa/telegram/services_battles.py`
+- `yuqa/telegram/services_battle_pass.py`
+- `yuqa/telegram/services_players.py`
+- `yuqa/telegram/services_content.py`
+- `yuqa/telegram/router.py`
 
-- `yuqa/telegram/router.py` is large and owns most command and callback wiring.
-- `yuqa/telegram/services.py` is large and owns most application orchestration.
-- Before editing either file, confirm there is not already a smaller domain service or repository that should absorb the logic instead.
+Before expanding those files, confirm the logic cannot live in:
+- A feature `domain/services.py`
+- `router_views.py`
+- `router_helpers.py`
+- `texts_<family>.py` or `ui_<family>.py`
+- A storage adapter in `yuqa/infrastructure/`
 
-## Test strategy
+## Test Map
+- Domain behavior:
+  `tests/test_cards.py`, `tests/test_clans.py`, `tests/test_shop.py`, `tests/test_banners.py`, `tests/test_battle_engine.py`, `tests/test_quests_battlepass.py`
+- Telegram transport and UX:
+  `tests/test_telegram_layer.py`, `tests/test_telegram_services.py`, `tests/test_router_wiring.py`, `tests/test_reply.py`, `tests/test_telegram_config.py`
+- Persistence:
+  `tests/test_persistence.py`
+- Tooling:
+  `tests/test_agent_audit.py`
 
-- Use `make test-file FILE=...` for focused iteration.
-- In-memory `TelegramServices()` is the fastest way to exercise behavior without persistence setup.
-- Persistence behavior is covered separately in `tests/test_persistence.py`.
+## Heuristics
+- Prefer changing domain modules over embedding rules in Telegram handlers.
+- Prefer changing `router_views.py` over adding rendering logic directly inside callbacks.
+- Keep callback schemas in `yuqa/telegram/callbacks.py` aligned with router handling.
+- Keep text-generation changes in the matching `yuqa/telegram/texts_<family>.py` module and keyboard changes in the matching `yuqa/telegram/ui_<family>.py` module.
+- Add focused regression coverage close to the behavior you changed.
 
-## Agent heuristics
-
-- Prefer changing domain modules over adding logic directly to the Telegram router.
-- Add regression tests beside the feature you changed.
-- If an edit crosses transport and domain boundaries, stop and verify the split is still coherent.
-- For menu reshuffles, keep reply-keyboard labels in `yuqa/telegram/ui.py` aligned with the text routing in `yuqa/telegram/router.py`, and use `yuqa/telegram/reply.py` for callback popups instead of visible chat notices when the UX calls for a popup.
+## Extra Docs
+- `docs/codebase.md`: fuller architecture and package map.
+- `yuqa/README.md`: package-level navigation.
+- `tests/README.md`: test inventory and where to add coverage.

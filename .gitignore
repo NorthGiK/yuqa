@@ -8,6 +8,7 @@ __pycache__/
 uv.lock
 yuqa.egg-info/
 .venv/
+.cache/
 main.build/
 # script that the execute binary file
 main.sh

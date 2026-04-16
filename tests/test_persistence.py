@@ -7,7 +7,14 @@ import pytest
 from yuqa.cards.domain.entities import Ability
 from yuqa.cards.domain.entities import PlayerCard
 from yuqa.infrastructure.sqlalchemy.migrations import upgrade_head
-from yuqa.shared.enums import CardClass, CardForm, IdeaStatus, Rarity, ResourceType, Universe
+from yuqa.shared.enums import (
+    CardClass,
+    CardForm,
+    IdeaStatus,
+    Rarity,
+    ResourceType,
+    Universe,
+)
 from yuqa.shared.value_objects.deck_slots import DeckSlots
 from yuqa.shared.value_objects.stat_block import StatBlock
 from yuqa.telegram.services import TelegramServices

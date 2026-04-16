@@ -6,13 +6,14 @@ from types import SimpleNamespace
 import pytest
 
 from yuqa.banners.domain.entities import Banner
-from yuqa.cards.domain.entities import Ability, AbilityEffect
+from yuqa.cards.domain.entities import Ability, AbilityEffect, PlayerCard
 from yuqa.quests.domain.entities import QuestReward
 from yuqa.shared.enums import (
     AbilityStat,
     AbilityTarget,
     BannerType,
     CardClass,
+    CardForm,
     ProfileBackgroundRarity,
     ResourceType,
     Rarity,
@@ -20,6 +21,7 @@ from yuqa.shared.enums import (
 )
 from yuqa.shared.errors import ForbiddenActionError
 from yuqa.shared.value_objects.date_range import DateRange
+from yuqa.shared.value_objects.deck_slots import DeckSlots
 from yuqa.shared.value_objects.resource_wallet import ResourceWallet
 from yuqa.shared.value_objects.stat_block import StatBlock
 from yuqa.telegram.compat import FSMContext, Message, User
@@ -326,6 +328,69 @@ async def test_admin_can_delete_card_and_manage_universes() -> None:
     assert "myverse" in universes
     universes = await services.remove_universe("myverse")
     assert "myverse" not in universes
+
+
+@pytest.mark.asyncio
+async def test_delete_card_template_cleans_saved_decks_and_runtime_drafts() -> None:
+    """Deleting a template should drop removed cards from saved decks and drafts."""
+
+    services = TelegramServices()
+    removed_template = await services.create_card_template(
+        name="Удаляемая",
+        universe=Universe.ORIGINAL,
+        rarity=Rarity.RARE,
+        image_key="removed.png",
+        card_class=CardClass.MELEE,
+        base_stats=StatBlock(1, 2, 3),
+        ascended_stats=StatBlock(4, 5, 6),
+        ability=Ability(0, 0),
+    )
+    kept_template = await services.create_card_template(
+        name="Остается",
+        universe=Universe.ORIGINAL,
+        rarity=Rarity.EPIC,
+        image_key="kept.png",
+        card_class=CardClass.TANK,
+        base_stats=StatBlock(2, 3, 4),
+        ascended_stats=StatBlock(5, 6, 7),
+        ability=Ability(0, 0),
+    )
+
+    player = await services.get_or_create_player(42)
+    removed_card_id = 100
+    kept_card_ids = [200, 201, 202, 203]
+    await services.player_cards.add(
+        PlayerCard(
+            id=removed_card_id,
+            owner_player_id=player.telegram_id,
+            template_id=removed_template.id,
+            level=1,
+            copies_owned=1,
+            current_form=CardForm.BASE,
+        )
+    )
+    for card_id in kept_card_ids:
+        await services.player_cards.add(
+            PlayerCard(
+                id=card_id,
+                owner_player_id=player.telegram_id,
+                template_id=kept_template.id,
+                level=1,
+                copies_owned=1,
+                current_form=CardForm.BASE,
+            )
+        )
+    player.collection_count = 5
+    player.battle_deck = DeckSlots((removed_card_id, *kept_card_ids))
+    services.deck_drafts[player.telegram_id] = [removed_card_id, *kept_card_ids]
+
+    await services.delete_card_template(removed_template.id)
+
+    assert player.battle_deck is None
+    assert services.deck_drafts[player.telegram_id] == kept_card_ids
+    remaining_cards = await services.list_player_cards(player.telegram_id)
+    assert {card.id for card in remaining_cards} == set(kept_card_ids)
+    assert player.collection_count == 4
 
 
 @pytest.mark.asyncio

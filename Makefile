@@ -1,4 +1,6 @@
 .DEFAULT_GOAL := help
+UV_CACHE_DIR ?= $(CURDIR)/.cache/uv
+UV := env UV_CACHE_DIR=$(UV_CACHE_DIR) uv
 
 .PHONY: help sync run test test-file format lint clean db-upgrade docker-build agent-summary agent-check
 
@@ -17,40 +19,41 @@ help:
 	@echo "  make clean      - remove caches"
 
 sync:
-	uv sync --extra dev
+	$(UV) sync --extra dev
 
 run:
-	uv run yuqa
+	$(UV) run yuqa
 
 test:
-	uv run pytest -q
+	$(UV) run pytest -q
 
 test-file:
 	@test -n "$(FILE)" || (echo "Usage: make test-file FILE=tests/test_shop.py" && exit 1)
-	uv run pytest -q "$(FILE)"
+	$(UV) run pytest -q "$(FILE)"
 
 lint:
-	uv run ruff check yuqa tests main.py
+	$(UV) run ruff check yuqa tests main.py
 
 format:
-	uv run ruff format yuqa tests main.py
+	$(UV) run ruff format yuqa tests main.py
 
 build:
-	uv run nuitka main.py
+	$(UV) run nuitka main.py
 
 # run binary file only on linux
 brun:
 	bash main.sh
 
 db-upgrade:
-	uv run alembic upgrade head
+	$(UV) run alembic upgrade head
 
 agent-summary:
-	uv run python scripts/agent_audit.py summary
+	$(UV) run python scripts/agent_audit.py summary
 
 agent-check:
-	uv run python scripts/agent_audit.py check
+	$(UV) run python scripts/agent_audit.py check
 
 clean:
 	find yuqa tests -type d -name '__pycache__' -prune -exec rm -rf {} +
 	rm -rf .pytest_cache
+	rm -rf .cache/uv

@@ -470,6 +470,35 @@ async def test_battle_search_requires_a_complete_deck(
 
 
 @pytest.mark.asyncio
+async def test_battle_search_rejects_duplicate_cards_in_saved_deck(
+    sample_template: CardTemplate,
+) -> None:
+    """Matchmaking should reject corrupted saved decks with duplicate cards."""
+
+    services = TelegramServices()
+    await services.card_templates.add(sample_template)
+
+    player = await services.get_or_create_player(1)
+    corrupted_deck = object.__new__(DeckSlots)
+    object.__setattr__(corrupted_deck, "card_ids", (1, 1, 2, 3, 4))
+    player.battle_deck = corrupted_deck
+    for card_id in {1, 2, 3, 4}:
+        await services.player_cards.add(
+            PlayerCard(
+                id=card_id,
+                owner_player_id=player.telegram_id,
+                template_id=1,
+                level=1,
+                copies_owned=1,
+                current_form=CardForm.BASE,
+            )
+        )
+
+    with pytest.raises(ValidationError, match="5 разных карт"):
+        await services.search_battle(1)
+
+
+@pytest.mark.asyncio
 async def test_deck_constructor_can_toggle_clear_and_save(
     sample_template: CardTemplate,
 ) -> None:

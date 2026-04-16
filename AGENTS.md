@@ -1,36 +1,66 @@
 # Repository Guidelines
 
-## Project Structure & Module Organization
-`yuqa/` is the main package. Features are split by domain: `cards`, `battles`, `shop`, `clans`, `quests`, `battle_pass`, and `players`. Most domains follow `domain/entities.py`, `domain/services.py`, and `domain/repositories.py`.
+## Fast Start
+- Run `make agent-summary` first. It prints the current architecture map, runtime flow, grouped edit paths, feature coverage, and hotspot files.
+- Run `make agent-check` before and after edits when touching domain code.
+- Use `make test-file FILE=...` for focused loops and `make test` before finishing.
 
-`yuqa/telegram/` contains the bot-facing layer, including routers, handlers, texts, UI, and config. `yuqa/infrastructure/` holds adapters such as `memory.py`, `local.py`, and `sqlalchemy/`. Shared enums, IDs, errors, and value objects live in `yuqa/shared/`. Tests mirror the behavior by feature under `tests/`. Runtime catalog data is stored in `data/yuqa/catalog.json`.
+## Runtime Flow
+1. `main.py`: tiny CLI shim.
+2. `yuqa/main.py`: loads env, optionally runs migrations, builds the app, starts polling.
+3. `yuqa/telegram/services.py`: chooses storage mode, wires repositories, and holds shared service helpers.
+4. `yuqa/telegram/services_battles.py`: battle drafting, round resolution, and matchmaking.
+5. `yuqa/telegram/services_battle_pass.py`: battle pass seasons, levels, and progress flows.
+6. `yuqa/telegram/services_players.py`: player lookup, profile, free rewards, and deck construction.
+7. `yuqa/telegram/services_social.py`: clans and ideas.
+8. `yuqa/telegram/services_content.py`: cards, banners, shop, starter cards, and admin content.
+9. `yuqa/telegram/router.py`: registers handlers and FSM flows.
+10. `yuqa/telegram/router_views.py`: renders screens reused by handlers.
+11. `yuqa/telegram/router_helpers.py`: parsing, pagination, and media extraction helpers.
 
-## Build, Test, and Development Commands
-- `make sync`: install dependencies, including dev tools, with `uv sync --extra dev`.
-- `make run`: start the Telegram bot with `uv run yuqa`.
-- `make test`: run the full test suite with `uv run pytest -q`.
-- `make test-file FILE=tests/test_shop.py`: run one test file.
-- `make agent-summary`: print a compact JSON map of entrypoints, layers, features, and hotspots.
-- `make agent-check`: validate that domain packages do not import Telegram or infrastructure code.
-- `make lint`: run Ruff checks.
-- `make format`: format Python files with Ruff.
-- `make clean`: remove Python cache directories.
+## Layer Boundaries
+- `yuqa/<feature>/domain/`: pure game rules, entities, repositories, and domain services.
+- `yuqa/telegram/`: bot transport, callbacks, FSM state, screen rendering, copy, and markup.
+- `yuqa/infrastructure/`: adapters for in-memory, JSON-backed, and SQLAlchemy-backed persistence.
+- `yuqa/shared/`: enums, IDs, errors, and reusable value objects.
+- `yuqa/application/`: app-level abstractions that must stay transport-agnostic.
 
-## AI-Agent Shortcuts
-Start with `make agent-summary`, then read `docs/ai-agents.md` only if you need more context. For runtime bugs, follow `main.py` -> `yuqa/main.py` -> `yuqa/telegram/services.py` -> `yuqa/telegram/router.py`. For feature work, prefer `yuqa/<feature>/domain/` over adding logic directly to the Telegram router.
+## Edit Paths
+- Domain rule change: start in `yuqa/<feature>/domain/services.py`, then entities/repositories, then feature tests.
+- Telegram handler or wizard flow: start in `yuqa/telegram/router.py` and `yuqa/telegram/states.py`.
+- Telegram screen, copy, or markup: start in `yuqa/telegram/router_views.py`, then `yuqa/telegram/texts.py` or `yuqa/telegram/texts_<family>.py`, and `yuqa/telegram/ui.py` or `yuqa/telegram/ui_<family>.py`.
+- Battle or matchmaking bug: start in `yuqa/telegram/services_battles.py`, then `tests/test_telegram_services.py`.
+- Battle pass bug: start in `yuqa/telegram/services_battle_pass.py`, then `tests/test_quests_battlepass.py` and `tests/test_telegram_services.py`.
+- Player/profile/free reward/deck bug: start in `yuqa/telegram/services_players.py`, then `tests/test_telegram_services.py`.
+- Clan or idea bug: start in `yuqa/telegram/services_social.py`, then `tests/test_telegram_services.py`.
+- Card/banner/shop/admin content bug: start in `yuqa/telegram/services_content.py`, then `tests/test_admin_content.py` and `tests/test_telegram_services.py`.
+- Persistence bug: inspect `yuqa/infrastructure/local.py` or `yuqa/infrastructure/sqlalchemy/repositories.py`, then `tests/test_persistence.py`.
+- Config or startup issue: inspect `yuqa/telegram/config.py` and `yuqa/main.py`.
 
-## Coding Style & Naming Conventions
-Use Python 3.14, 4-space indentation, and type hints on public APIs. Follow the existing style: `@dataclass(slots=True)` for entities/value objects, `snake_case` for modules/functions/variables, `PascalCase` for classes, and `UPPER_SNAKE_CASE` for constants.
+## Hotspots
+- `yuqa/telegram/services.py`: service container and shared helpers. Keep feature-specific flows in the dedicated service modules.
+- `yuqa/telegram/services_battles.py`: battle and matchmaking orchestration.
+- `yuqa/telegram/services_battle_pass.py`: season and progress orchestration.
+- `yuqa/telegram/services_players.py`: player profile, free reward, and deck orchestration.
+- `yuqa/telegram/services_content.py`: cards, banners, shop, and starter-card orchestration.
+- `yuqa/telegram/texts.py` and `yuqa/telegram/ui.py`: thin compatibility facades. Prefer editing the matching `texts_<family>.py` or `ui_<family>.py` module.
+- `yuqa/telegram/router.py`: handler wiring and wizard state transitions. Keep reusable rendering logic in `router_views.py`.
 
-Keep domain rules in `domain/services.py` and transport concerns in `yuqa/telegram/`. Use Ruff for formatting and linting before committing.
+## Tests
+- Domain tests: `tests/test_cards.py`, `tests/test_clans.py`, `tests/test_shop.py`, `tests/test_banners.py`, `tests/test_battle_engine.py`, `tests/test_quests_battlepass.py`.
+- Telegram behavior: `tests/test_telegram_layer.py`, `tests/test_telegram_services.py`, `tests/test_router_wiring.py`, `tests/test_reply.py`, `tests/test_telegram_config.py`.
+- Persistence: `tests/test_persistence.py`.
+- Tooling and repo map: `tests/test_agent_audit.py`.
 
-## Testing Guidelines
-Pytest is the test runner, with `pytest-asyncio` configured for `asyncio_mode = auto`. Name files `test_*.py` and tests `test_<behavior>()`. For async flows, use `@pytest.mark.asyncio`.
+## Environment
+- `BOT_TOKEN` is required.
+- `ADMIN_IDS` is a comma-separated list of Telegram user IDs.
+- `YUQA_DATA_DIR` defaults to `data/yuqa`.
+- If `DATABASE_URL` is blank, the app uses SQLite inside `YUQA_DATA_DIR`.
+- `YUQA_AUTO_MIGRATE=true` applies Alembic migrations during startup.
 
-Each feature change should include happy-path coverage, at least one validation or error-path assertion, and regression coverage for fixed bugs.
-
-## Commit & Pull Request Guidelines
-Use Conventional Commits, for example `feat: add clan invite validation` or `fix: prevent negative wallet spend`. Pull requests should include a short problem statement, a summary of changes, and test evidence such as `make test` output. Note any config or data changes, especially updates to `data/yuqa/catalog.json` or required environment variables.
-
-## Security & Configuration Tips
-Configuration comes from `BOT_TOKEN` (required), `ADMIN_IDS`, and optional `YUQA_DATA_DIR`. Use `.env.example` as a template, keep secrets in local `.env`, and never commit production tokens.
+## Coding Rules
+- Use Python 3.14, 4-space indentation, and type hints on public APIs.
+- Keep domain rules out of `yuqa/telegram/` unless they are transport-specific.
+- Prefer smaller helper/view modules over expanding the main router.
+- Add happy-path, validation-path, and regression coverage for each change.

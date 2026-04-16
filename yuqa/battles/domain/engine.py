@@ -87,10 +87,7 @@ class BattleEngine:
         for action in actions:
             if action.ap_cost < 0 or action.ap_cost > 5:
                 raise ValidationError("ap_cost must be between 0 and 5")
-            if (
-                spent_ap + action.ap_cost
-                > self._round_ap(battle.current_round)
-            ):
+            if spent_ap + action.ap_cost > self._round_ap(battle.current_round):
                 raise BattleRuleViolationError("cannot spend more AP than available")
             if action.action_type == BattleActionType.BONUS:
                 spent_ap += action.ap_cost

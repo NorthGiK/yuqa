@@ -11,6 +11,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 PACKAGE_ROOT = ROOT / "yuqa"
 TESTS_ROOT = ROOT / "tests"
+DOCS_ROOT = ROOT / "docs"
 
 DOMAIN_PACKAGES = (
     "banners",
@@ -31,6 +32,17 @@ LAYER_GROUPS = {
     "application": {"yuqa.application"},
 }
 HOTSPOT_THRESHOLD = 800
+FEATURE_NAME_ALIASES = {
+    "banners": ("banners", "banner"),
+    "battle_pass": ("battle_pass", "battlepass"),
+    "battles": ("battles", "battle"),
+    "cards": ("cards", "card"),
+    "clans": ("clans", "clan"),
+    "ideas": ("ideas", "idea"),
+    "players": ("players", "player"),
+    "quests": ("quests", "quest"),
+    "shop": ("shop",),
+}
 
 
 @dataclass(slots=True)
@@ -41,11 +53,17 @@ class PythonModule:
     module: str
     imports: set[str]
     lines: int
+    functions: int
+    classes: int
 
 
 def _module_name(path: Path) -> str:
     relative = path.relative_to(ROOT).with_suffix("")
     return ".".join(relative.parts)
+
+
+def _path_from_root(path: Path) -> str:
+    return path.relative_to(ROOT).as_posix()
 
 
 def _top_level_package(module: str) -> str | None:
@@ -73,11 +91,17 @@ def _read_python_module(path: Path) -> PythonModule:
                 imports.add(".".join(target_parts + [node.module]))
             else:
                 imports.add(node.module)
+    functions = sum(
+        isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)) for node in ast.walk(tree)
+    )
+    classes = sum(isinstance(node, ast.ClassDef) for node in ast.walk(tree))
     return PythonModule(
         path=path,
         module=_module_name(path),
         imports=imports,
         lines=source.count("\n") + 1,
+        functions=functions,
+        classes=classes,
     )
 
 
@@ -85,14 +109,28 @@ def _iter_python_modules(root: Path) -> list[PythonModule]:
     return [_read_python_module(path) for path in sorted(root.rglob("*.py"))]
 
 
-def _feature_summary(name: str) -> dict[str, object]:
+def _feature_tests(name: str, test_modules: list[PythonModule]) -> list[str]:
+    """Return direct test files that touch a feature by import or filename."""
+
+    prefix = f"yuqa.{name}"
+    aliases = FEATURE_NAME_ALIASES[name]
+    matched = {
+        _path_from_root(module.path)
+        for module in test_modules
+        if any(
+            imported == prefix or imported.startswith(prefix + ".")
+            for imported in module.imports
+        )
+        or any(alias in module.path.stem for alias in aliases)
+    }
+    return sorted(matched)
+
+
+def _feature_summary(name: str, test_modules: list[PythonModule]) -> dict[str, object]:
     base = PACKAGE_ROOT / name
     domain_dir = base / "domain"
-    files = sorted(path.relative_to(ROOT).as_posix() for path in base.rglob("*.py"))
-    tests = sorted(
-        path.relative_to(ROOT).as_posix()
-        for path in TESTS_ROOT.glob(f"test*{name.replace('_', '')}*.py")
-    )
+    files = sorted(_path_from_root(path) for path in base.rglob("*.py"))
+    tests = _feature_tests(name, test_modules)
     return {
         "name": name,
         "domain_modules": sorted(
@@ -100,6 +138,167 @@ def _feature_summary(name: str) -> dict[str, object]:
         ),
         "files": files,
         "tests": tests,
+        "test_status": "direct" if tests else "missing_direct_tests",
+    }
+
+
+def _runtime_flow() -> list[dict[str, str]]:
+    """Return the normal runtime entry flow for debugging."""
+
+    return [
+        {"path": "main.py", "role": "CLI shim that forwards into the package entrypoint."},
+        {
+            "path": "yuqa/main.py",
+            "role": "Loads env settings, runs migrations, builds services, and starts polling.",
+        },
+        {
+            "path": "yuqa/telegram/services.py",
+            "role": "Builds repositories, selects storage mode, and hosts shared service helpers.",
+        },
+        {
+            "path": "yuqa/telegram/services_battles.py",
+            "role": "Owns battle drafting, round resolution, and matchmaking behavior.",
+        },
+        {
+            "path": "yuqa/telegram/services_battle_pass.py",
+            "role": "Owns battle pass seasons, levels, and progress purchasing.",
+        },
+        {
+            "path": "yuqa/telegram/services_players.py",
+            "role": "Owns player lookup, profile, free rewards, and deck construction.",
+        },
+        {
+            "path": "yuqa/telegram/services_social.py",
+            "role": "Owns clan membership and idea proposal/moderation flows.",
+        },
+        {
+            "path": "yuqa/telegram/services_content.py",
+            "role": "Owns card, banner, shop, starter-card, and admin content flows.",
+        },
+        {
+            "path": "yuqa/telegram/services_support.py",
+            "role": "Holds small shared service dataclasses and utility helpers.",
+        },
+        {
+            "path": "yuqa/telegram/router.py",
+            "role": "Registers handlers, FSM flows, and callback wiring.",
+        },
+        {
+            "path": "yuqa/telegram/router_views.py",
+            "role": "Renders Telegram screens and admin sections reused by handlers.",
+        },
+        {
+            "path": "yuqa/telegram/router_helpers.py",
+            "role": "Holds parsing, pagination, and media extraction helpers for router flows.",
+        },
+    ]
+
+
+def _module_groups() -> dict[str, list[str]]:
+    """Return grouped edit paths for common tasks."""
+
+    return {
+        "runtime_bootstrap": ["main.py", "yuqa/main.py", "yuqa/telegram/config.py"],
+        "telegram_flow": [
+            "yuqa/telegram/router.py",
+            "yuqa/telegram/states.py",
+            "yuqa/telegram/callbacks.py",
+        ],
+        "telegram_views": [
+            "yuqa/telegram/router_views.py",
+            "yuqa/telegram/texts.py",
+            "yuqa/telegram/ui.py",
+            "yuqa/telegram/reply.py",
+        ],
+        "telegram_texts": [
+            "yuqa/telegram/texts.py",
+            "yuqa/telegram/texts_navigation.py",
+            "yuqa/telegram/texts_battle.py",
+            "yuqa/telegram/texts_battle_pass.py",
+            "yuqa/telegram/texts_profile.py",
+            "yuqa/telegram/texts_cards.py",
+            "yuqa/telegram/texts_rewards.py",
+            "yuqa/telegram/texts_ideas.py",
+            "yuqa/telegram/texts_catalog.py",
+            "yuqa/telegram/texts_admin.py",
+        ],
+        "telegram_ui": [
+            "yuqa/telegram/ui.py",
+            "yuqa/telegram/ui_navigation.py",
+            "yuqa/telegram/ui_battle.py",
+            "yuqa/telegram/ui_cards.py",
+            "yuqa/telegram/ui_profile.py",
+            "yuqa/telegram/ui_catalog.py",
+            "yuqa/telegram/ui_rewards.py",
+            "yuqa/telegram/ui_ideas.py",
+            "yuqa/telegram/ui_admin.py",
+        ],
+        "telegram_services": [
+            "yuqa/telegram/services.py",
+            "yuqa/telegram/services_battles.py",
+            "yuqa/telegram/services_battle_pass.py",
+            "yuqa/telegram/services_players.py",
+            "yuqa/telegram/services_social.py",
+            "yuqa/telegram/services_content.py",
+            "yuqa/telegram/services_support.py",
+        ],
+        "storage": [
+            "yuqa/infrastructure/local.py",
+            "yuqa/infrastructure/memory.py",
+            "yuqa/infrastructure/sqlalchemy/repositories.py",
+            "yuqa/infrastructure/sqlalchemy/models.py",
+        ],
+        "agent_docs": [
+            "AGENTS.md",
+            "docs/ai-agents.md",
+            "docs/codebase.md",
+            "scripts/agent_audit.py",
+        ],
+        "tests": [
+            "tests/test_telegram_layer.py",
+            "tests/test_telegram_services.py",
+            "tests/test_persistence.py",
+        ],
+    }
+
+
+def _change_playbooks() -> dict[str, list[str]]:
+    """Return shortest edit paths for the most common task classes."""
+
+    return {
+        "runtime_bug": [
+            "yuqa/main.py",
+            "yuqa/telegram/services.py",
+            "yuqa/telegram/services_battles.py",
+            "yuqa/telegram/services_battle_pass.py",
+            "yuqa/telegram/services_players.py",
+            "yuqa/telegram/services_content.py",
+            "yuqa/telegram/router.py",
+        ],
+        "new_domain_rule": [
+            "yuqa/<feature>/domain/services.py",
+            "yuqa/<feature>/domain/entities.py",
+            "tests/test_<feature>.py",
+        ],
+        "telegram_copy_or_layout": [
+            "yuqa/telegram/router_views.py",
+            "yuqa/telegram/texts.py",
+            "yuqa/telegram/texts_<family>.py",
+            "yuqa/telegram/ui.py",
+            "yuqa/telegram/ui_<family>.py",
+            "tests/test_telegram_layer.py",
+        ],
+        "fsm_or_handler_flow": [
+            "yuqa/telegram/router.py",
+            "yuqa/telegram/states.py",
+            "tests/test_router_wiring.py",
+            "tests/test_telegram_services.py",
+        ],
+        "persistence_bug": [
+            "yuqa/infrastructure/sqlalchemy/repositories.py",
+            "yuqa/infrastructure/sqlalchemy/models.py",
+            "tests/test_persistence.py",
+        ],
     }
 
 
@@ -107,15 +306,19 @@ def build_summary() -> dict[str, object]:
     """Build a machine-readable architecture snapshot."""
 
     modules = _iter_python_modules(PACKAGE_ROOT)
+    test_modules = _iter_python_modules(TESTS_ROOT)
     hotspots = [
         {
-            "path": module.path.relative_to(ROOT).as_posix(),
+            "path": _path_from_root(module.path),
             "lines": module.lines,
+            "functions": module.functions,
+            "classes": module.classes,
         }
         for module in modules
         if module.lines >= HOTSPOT_THRESHOLD
     ]
     hotspots.sort(key=lambda item: (-int(item["lines"]), str(item["path"])))
+    features = [_feature_summary(name, test_modules) for name in DOMAIN_PACKAGES]
     return {
         "entrypoints": [
             "main.py",
@@ -139,8 +342,16 @@ def build_summary() -> dict[str, object]:
             "infrastructure": "Persistence adapters for in-memory, local catalog, and SQLAlchemy.",
             "shared": "Enums, IDs, errors, and reusable value objects.",
         },
+        "runtime_flow": _runtime_flow(),
+        "module_groups": _module_groups(),
+        "change_playbooks": _change_playbooks(),
         "hotspots": hotspots,
-        "features": [_feature_summary(name) for name in DOMAIN_PACKAGES],
+        "features": features,
+        "feature_test_gaps": [
+            feature["name"]
+            for feature in features
+            if feature["test_status"] == "missing_direct_tests"
+        ],
         "storage_modes": [
             {
                 "mode": "memory",
@@ -162,9 +373,23 @@ def build_summary() -> dict[str, object]:
             "runtime_bootstrap": "yuqa/main.py",
             "telegram_handlers": "yuqa/telegram/router.py",
             "service_orchestration": "yuqa/telegram/services.py",
+            "battle_orchestration": "yuqa/telegram/services_battles.py",
+            "battle_pass_orchestration": "yuqa/telegram/services_battle_pass.py",
+            "player_profile_orchestration": "yuqa/telegram/services_players.py",
+            "social_orchestration": "yuqa/telegram/services_social.py",
+            "content_admin_orchestration": "yuqa/telegram/services_content.py",
+            "telegram_views": "yuqa/telegram/router_views.py",
+            "telegram_copy": "yuqa/telegram/texts.py",
+            "telegram_markup": "yuqa/telegram/ui.py",
+            "router_helpers": "yuqa/telegram/router_helpers.py",
             "local_storage": "yuqa/infrastructure/local.py",
             "database_storage": "yuqa/infrastructure/sqlalchemy/repositories.py",
         },
+        "docs": [
+            "AGENTS.md",
+            _path_from_root(DOCS_ROOT / "ai-agents.md"),
+            _path_from_root(DOCS_ROOT / "codebase.md"),
+        ],
     }
 
 

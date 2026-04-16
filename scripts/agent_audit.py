@@ -181,7 +181,43 @@ def _runtime_flow() -> list[dict[str, str]]:
         },
         {
             "path": "yuqa/telegram/router.py",
-            "role": "Registers handlers, FSM flows, and callback wiring.",
+            "role": "Thin compatibility surface that builds the router from public/admin registration modules.",
+        },
+        {
+            "path": "yuqa/telegram/router_public.py",
+            "role": "Registers public commands, callbacks, and non-admin wizard state handlers.",
+        },
+        {
+            "path": "yuqa/telegram/router_admin.py",
+            "role": "Registers admin commands, AdminCallback flows, and admin-only wizard state handlers.",
+        },
+        {
+            "path": "yuqa/telegram/router_wizards_players.py",
+            "role": "Owns clan, idea, profile nickname, and admin player wizard steps.",
+        },
+        {
+            "path": "yuqa/telegram/router_wizards_progression.py",
+            "role": "Owns battle pass and free-reward wizard steps.",
+        },
+        {
+            "path": "yuqa/telegram/router_wizards_content.py",
+            "role": "Thin compatibility facade that re-exports the content wizard families.",
+        },
+        {
+            "path": "yuqa/telegram/router_wizards_cards.py",
+            "role": "Owns universe, card, profile background, and starter-card wizard steps.",
+        },
+        {
+            "path": "yuqa/telegram/router_wizards_banners.py",
+            "role": "Owns banner creation and banner-reward wizard steps.",
+        },
+        {
+            "path": "yuqa/telegram/router_wizards_shop.py",
+            "role": "Owns shop item wizard steps.",
+        },
+        {
+            "path": "yuqa/telegram/router_battle.py",
+            "role": "Owns shared battle command and matchmaking entry helpers.",
         },
         {
             "path": "yuqa/telegram/router_views.py",
@@ -201,8 +237,19 @@ def _module_groups() -> dict[str, list[str]]:
         "runtime_bootstrap": ["main.py", "yuqa/main.py", "yuqa/telegram/config.py"],
         "telegram_flow": [
             "yuqa/telegram/router.py",
+            "yuqa/telegram/router_public.py",
+            "yuqa/telegram/router_admin.py",
             "yuqa/telegram/states.py",
             "yuqa/telegram/callbacks.py",
+        ],
+        "telegram_wizards": [
+            "yuqa/telegram/router_wizards_players.py",
+            "yuqa/telegram/router_wizards_progression.py",
+            "yuqa/telegram/router_wizards_content.py",
+            "yuqa/telegram/router_wizards_cards.py",
+            "yuqa/telegram/router_wizards_banners.py",
+            "yuqa/telegram/router_wizards_shop.py",
+            "yuqa/telegram/router_battle.py",
         ],
         "telegram_views": [
             "yuqa/telegram/router_views.py",
@@ -269,11 +316,10 @@ def _change_playbooks() -> dict[str, list[str]]:
         "runtime_bug": [
             "yuqa/main.py",
             "yuqa/telegram/services.py",
-            "yuqa/telegram/services_battles.py",
-            "yuqa/telegram/services_battle_pass.py",
-            "yuqa/telegram/services_players.py",
-            "yuqa/telegram/services_content.py",
             "yuqa/telegram/router.py",
+            "yuqa/telegram/router_public.py",
+            "yuqa/telegram/router_admin.py",
+            "yuqa/telegram/router_views.py",
         ],
         "new_domain_rule": [
             "yuqa/<feature>/domain/services.py",
@@ -290,6 +336,9 @@ def _change_playbooks() -> dict[str, list[str]]:
         ],
         "fsm_or_handler_flow": [
             "yuqa/telegram/router.py",
+            "yuqa/telegram/router_public.py",
+            "yuqa/telegram/router_admin.py",
+            "yuqa/telegram/router_wizards_<family>.py",
             "yuqa/telegram/states.py",
             "tests/test_router_wiring.py",
             "tests/test_telegram_services.py",
@@ -372,6 +421,8 @@ def build_summary() -> dict[str, object]:
         "recommended_start_points": {
             "runtime_bootstrap": "yuqa/main.py",
             "telegram_handlers": "yuqa/telegram/router.py",
+            "telegram_public_handlers": "yuqa/telegram/router_public.py",
+            "telegram_admin_handlers": "yuqa/telegram/router_admin.py",
             "service_orchestration": "yuqa/telegram/services.py",
             "battle_orchestration": "yuqa/telegram/services_battles.py",
             "battle_pass_orchestration": "yuqa/telegram/services_battle_pass.py",

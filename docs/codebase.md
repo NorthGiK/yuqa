@@ -28,10 +28,28 @@ The codebase is organized around three main concerns:
 9. `yuqa/telegram/services_content.py`
    Owns cards, banners, shop items, starter cards, and admin content flows.
 10. `yuqa/telegram/router.py`
-   Registers commands, callbacks, FSM handlers, and message routing.
-11. `yuqa/telegram/router_views.py`
+   Thin compatibility builder that assembles the router from public/admin registration modules.
+11. `yuqa/telegram/router_public.py`
+   Registers public commands, callbacks, and player-facing wizard entry points.
+12. `yuqa/telegram/router_admin.py`
+   Registers admin commands, callbacks, and admin-only state handlers.
+13. `yuqa/telegram/router_wizards_players.py`
+   Owns clan, idea, profile, and admin-player wizard steps.
+14. `yuqa/telegram/router_wizards_progression.py`
+   Owns battle pass and free-reward wizard steps.
+15. `yuqa/telegram/router_wizards_content.py`
+   Thin compatibility facade for content-admin wizard families.
+16. `yuqa/telegram/router_wizards_cards.py`
+   Owns universe, card, profile-background, and starter-card wizard steps.
+17. `yuqa/telegram/router_wizards_banners.py`
+   Owns banner creation and banner-reward wizard steps.
+18. `yuqa/telegram/router_wizards_shop.py`
+   Owns shop item wizard steps.
+19. `yuqa/telegram/router_battle.py`
+   Owns battle queue entry and start helpers shared by public callbacks.
+20. `yuqa/telegram/router_views.py`
    Renders reusable screens such as profile, collection, battle, admin sections, and gallery pages.
-12. `yuqa/telegram/router_helpers.py`
+21. `yuqa/telegram/router_helpers.py`
    Holds pure parsing and pagination helpers shared by router flows.
 
 ## Package Map
@@ -67,7 +85,16 @@ Current feature packages:
 - `compat.py`: aiogram compatibility shims and test doubles
 - `config.py`: env parsing
 - `reply.py`: safe send/edit helpers
-- `router.py`: handler registration and FSM flows
+- `router.py`: thin compatibility builder and import-stable facade
+- `router_public.py`: public command/callback registration
+- `router_admin.py`: admin command/callback registration
+- `router_wizards_players.py`: player/clan/idea/admin-player wizard steps
+- `router_wizards_progression.py`: battle pass and free-reward wizard steps
+- `router_wizards_content.py`: compatibility facade for content-admin wizard steps
+- `router_wizards_cards.py`: card/profile-background/universe/starter-card wizard steps
+- `router_wizards_banners.py`: banner wizard steps
+- `router_wizards_shop.py`: shop wizard steps
+- `router_battle.py`: battle queue helpers
 - `router_views.py`: reusable screens
 - `router_helpers.py`: pure helper functions
 - `services.py`: service container, storage selection, and shared helpers
@@ -114,10 +141,15 @@ The bot can run in three modes:
 - It combines text, markup, and media preview behavior
 - Multiple callbacks or handlers should reuse the same screen builder
 
-### Put logic in `router.py` when
+### Put logic in `router_public.py` or `router_admin.py` when
 - It is about handler registration
-- It is FSM input capture or step transitions
 - It is callback/message wiring rather than reusable rendering
+- It decides which wizard or screen flow should run
+
+### Put logic in `router_wizards_<family>.py`, `router_wizards_cards.py`, `router_wizards_banners.py`, `router_wizards_shop.py`, or `router_battle.py` when
+- It is FSM input capture or step transitions
+- It validates per-step user input before the next state
+- It is a reusable wizard step invoked from more than one registration point
 
 ### Put logic in `infrastructure/` when
 - It is storage-specific
@@ -135,8 +167,14 @@ The bot can run in three modes:
   Player profile, free reward, and deck orchestration.
 - `yuqa/telegram/services_content.py`
   Card, banner, shop, and starter-card orchestration.
-- `yuqa/telegram/router.py`
-  Handler registration and wizard state transitions.
+- `yuqa/telegram/router_public.py`
+  Public command and callback registration.
+- `yuqa/telegram/router_admin.py`
+  Admin command and callback registration.
+- `yuqa/telegram/router_wizards_cards.py`
+  Card/profile-background/starter-card wizard surface.
+- `yuqa/telegram/router_wizards_banners.py`
+  Banner and reward wizard surface.
 
 Use caution before making those files larger. Prefer new helper modules or feature-level services when the change is cohesive enough.
 
@@ -145,6 +183,7 @@ Use caution before making those files larger. Prefer new helper modules or featu
 ### Domain
 - `tests/test_cards.py`
 - `tests/test_clans.py`
+- `tests/test_ideas.py`
 - `tests/test_shop.py`
 - `tests/test_banners.py`
 - `tests/test_battle_engine.py`
@@ -173,11 +212,13 @@ Use caution before making those files larger. Prefer new helper modules or featu
 
 ### If you are debugging a callback or command
 1. `yuqa/telegram/router.py`
-2. `yuqa/telegram/router_views.py`
-3. `yuqa/telegram/texts.py`
-4. The matching `yuqa/telegram/texts_<family>.py`
-5. `yuqa/telegram/ui.py`
-6. The matching `yuqa/telegram/ui_<family>.py`
+2. `yuqa/telegram/router_public.py` or `yuqa/telegram/router_admin.py`
+3. The matching `yuqa/telegram/router_wizards_players.py`, `yuqa/telegram/router_wizards_progression.py`, `yuqa/telegram/router_wizards_cards.py`, `yuqa/telegram/router_wizards_banners.py`, `yuqa/telegram/router_wizards_shop.py`, or `yuqa/telegram/router_battle.py`
+4. `yuqa/telegram/router_views.py`
+5. `yuqa/telegram/texts.py`
+6. The matching `yuqa/telegram/texts_<family>.py`
+7. `yuqa/telegram/ui.py`
+8. The matching `yuqa/telegram/ui_<family>.py`
 
 ### If you are debugging persistence
 1. `yuqa/infrastructure/sqlalchemy/repositories.py`

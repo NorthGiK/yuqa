@@ -24,8 +24,11 @@ from yuqa.shared.value_objects.date_range import DateRange
 from yuqa.shared.value_objects.deck_slots import DeckSlots
 from yuqa.shared.value_objects.resource_wallet import ResourceWallet
 from yuqa.shared.value_objects.stat_block import StatBlock
-from yuqa.telegram.compat import FSMContext, Message, User
+from yuqa.telegram.callbacks import AdminCallback
+from yuqa.telegram.compat import CallbackQuery, FSMContext, Message, User
+from yuqa.telegram.config import Settings
 from yuqa.telegram.router import (
+    build_router,
     card_ability_cost,
     card_ability_cooldown,
     card_ability_effects,
@@ -41,6 +44,7 @@ from yuqa.telegram.router import (
     start_clan_creation,
     start_free_rewards_edit,
 )
+from yuqa.telegram.states import CardCreate
 from yuqa.telegram.services import TelegramServices
 
 
@@ -78,6 +82,56 @@ async def test_card_creation_wizard_can_finish_and_reset() -> None:
     await start_card_create(Message(from_user=admin, text="/admin"), state)
     await state.clear()
     assert state.state is None
+
+
+@pytest.mark.asyncio
+async def test_card_wizard_can_pick_existing_universe_from_admin_callback() -> None:
+    """The universe picker buttons should advance the card wizard."""
+
+    services = TelegramServices()
+    await services.add_universe("naruto")
+    state = FSMContext()
+    admin = User(1)
+
+    await start_card_create(Message(from_user=admin, text="/admin"), state)
+    await card_name(Message(from_user=admin, text="Рейна"), state, services)
+
+    router = build_router(
+        services,
+        Settings(
+            token="test-token",
+            admin_ids={1},
+            content_dir=None,
+            database_url=None,
+            auto_migrate=False,
+        ),
+    )
+    if hasattr(router, "observers"):
+        admin_actions = next(
+            handler.callback
+            for handler in router.observers["callback_query"].handlers
+            if handler.callback.__name__ == "admin_actions"
+        )
+    else:
+        admin_actions = next(
+            callback
+            for event_type, _filters, callback in router.handlers
+            if event_type == "callback_query" and callback.__name__ == "admin_actions"
+        )
+    callback = CallbackQuery(
+        from_user=admin, message=Message(from_user=admin, text="")
+    )
+
+    await admin_actions(
+        callback,
+        AdminCallback(action="card_universe_pick", value="naruto"),
+        state,
+    )
+
+    assert state.state == CardCreate.rarity
+    assert state.data["universe"] == "naruto"
+    assert callback.message.text is not None
+    assert "редкость" in callback.message.text
 
 
 @pytest.mark.asyncio

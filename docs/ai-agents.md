@@ -15,7 +15,16 @@
 - `yuqa/telegram/services_social.py` owns clans and ideas.
 - `yuqa/telegram/services_content.py` owns cards, banners, shop items, starter cards, and content-admin flows.
 - `yuqa/telegram/services_support.py` holds small shared service helpers.
-- `yuqa/telegram/router.py` owns handler registration and FSM flows.
+- `yuqa/telegram/router.py` is the compatibility builder that assembles the router from smaller handler modules.
+- `yuqa/telegram/router_public.py` owns public command and callback registration.
+- `yuqa/telegram/router_admin.py` owns admin command and callback registration.
+- `yuqa/telegram/router_wizards_players.py` owns clan, idea, profile, and admin-player wizard steps.
+- `yuqa/telegram/router_wizards_progression.py` owns battle pass and free-reward wizard steps.
+- `yuqa/telegram/router_wizards_content.py` is the compatibility facade for content-admin wizard families.
+- `yuqa/telegram/router_wizards_cards.py` owns universe, card, profile-background, and starter-card wizard steps.
+- `yuqa/telegram/router_wizards_banners.py` owns banner creation and banner-reward wizard steps.
+- `yuqa/telegram/router_wizards_shop.py` owns shop item wizard steps.
+- `yuqa/telegram/router_battle.py` owns battle entry and queue helpers shared by public callbacks.
 - `yuqa/telegram/router_views.py` owns reusable screens and admin section rendering.
 - `yuqa/telegram/router_helpers.py` owns parsing, pagination, and media extraction.
 - `yuqa/telegram/texts.py` is the compatibility facade for `texts_<family>.py`.
@@ -47,7 +56,9 @@ Open these files in order:
 5. `yuqa/telegram/services_players.py`
 6. `yuqa/telegram/services_content.py`
 7. `yuqa/telegram/router.py`
-8. `yuqa/telegram/router_views.py`
+8. `yuqa/telegram/router_public.py`
+9. `yuqa/telegram/router_admin.py`
+10. `yuqa/telegram/router_views.py`
 
 ### New Domain Rule
 Open:
@@ -63,14 +74,15 @@ Open:
 3. The matching `yuqa/telegram/texts_<family>.py`
 4. `yuqa/telegram/ui.py`
 5. The matching `yuqa/telegram/ui_<family>.py`
-4. `tests/test_telegram_layer.py`
+6. `tests/test_telegram_layer.py`
 
 ### Wizard or Handler Flow Change
 Open:
-1. `yuqa/telegram/router.py`
-2. `yuqa/telegram/states.py`
-3. `tests/test_router_wiring.py`
-4. `tests/test_telegram_services.py`
+1. `yuqa/telegram/router_public.py` or `yuqa/telegram/router_admin.py`
+2. The matching `yuqa/telegram/router_wizards_players.py`, `yuqa/telegram/router_wizards_progression.py`, `yuqa/telegram/router_wizards_cards.py`, `yuqa/telegram/router_wizards_banners.py`, `yuqa/telegram/router_wizards_shop.py`, or `yuqa/telegram/router_battle.py`
+3. `yuqa/telegram/states.py`
+4. `tests/test_router_wiring.py`
+5. `tests/test_telegram_services.py`
 
 ### Persistence Bug
 Open:
@@ -85,18 +97,22 @@ Open:
 - `yuqa/telegram/services_battle_pass.py`
 - `yuqa/telegram/services_players.py`
 - `yuqa/telegram/services_content.py`
-- `yuqa/telegram/router.py`
+- `yuqa/telegram/router_public.py`
+- `yuqa/telegram/router_admin.py`
+- `yuqa/telegram/router_wizards_cards.py`
+- `yuqa/telegram/router_wizards_banners.py`
 
 Before expanding those files, confirm the logic cannot live in:
 - A feature `domain/services.py`
 - `router_views.py`
 - `router_helpers.py`
+- `router_wizards_players.py`, `router_wizards_progression.py`, `router_wizards_cards.py`, `router_wizards_banners.py`, `router_wizards_shop.py`, or `router_battle.py`
 - `texts_<family>.py` or `ui_<family>.py`
 - A storage adapter in `yuqa/infrastructure/`
 
 ## Test Map
 - Domain behavior:
-  `tests/test_cards.py`, `tests/test_clans.py`, `tests/test_shop.py`, `tests/test_banners.py`, `tests/test_battle_engine.py`, `tests/test_quests_battlepass.py`
+  `tests/test_cards.py`, `tests/test_clans.py`, `tests/test_ideas.py`, `tests/test_shop.py`, `tests/test_banners.py`, `tests/test_battle_engine.py`, `tests/test_quests_battlepass.py`
 - Telegram transport and UX:
   `tests/test_telegram_layer.py`, `tests/test_telegram_services.py`, `tests/test_router_wiring.py`, `tests/test_reply.py`, `tests/test_telegram_config.py`
 - Persistence:
@@ -107,7 +123,7 @@ Before expanding those files, confirm the logic cannot live in:
 ## Heuristics
 - Prefer changing domain modules over embedding rules in Telegram handlers.
 - Prefer changing `router_views.py` over adding rendering logic directly inside callbacks.
-- Keep callback schemas in `yuqa/telegram/callbacks.py` aligned with router handling.
+- Keep callback schemas in `yuqa/telegram/callbacks.py` aligned with the matching handler family in `router_public.py` or `router_admin.py`.
 - Keep text-generation changes in the matching `yuqa/telegram/texts_<family>.py` module and keyboard changes in the matching `yuqa/telegram/ui_<family>.py` module.
 - Add focused regression coverage close to the behavior you changed.
 

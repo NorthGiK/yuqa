@@ -180,11 +180,14 @@ class TelegramServices(
             self.store.action_events if self.store is not None else []
         )
         self.battle_action_drafts: dict[tuple[int, int, int], list[BattleAction]] = {}
+        self.battle_bonus_carryover: dict[tuple[int, int], int] = {}
+        self.battle_current_turn_player_ids: dict[int, int] = {}
+        self.battle_action_locks: dict[int, asyncio.Lock] = {}
         self.battle_round_started_at: dict[int, datetime] = {}
         self.battle_timeout_tasks: dict[int, asyncio.Task] = {}
         self.battle_inactive_rounds: dict[tuple[int, int], int] = {}
         self.battle_round_timeout_seconds = 15.0
-        self.battle_inactive_round_limit = 15
+        self.battle_inactive_round_limit = 10
         self.enable_background_battle_timers = False
         self.battle_timeout_notifier = None
         self.rng = Random()

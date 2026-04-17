@@ -45,6 +45,7 @@ from yuqa.telegram.router import (
     show_tops,
     search_battle,
 )
+from yuqa.telegram.router_views import show_battle_round, show_battle_switch
 from yuqa.telegram.services import TelegramServices
 from yuqa.telegram.texts import (
     admin_text,
@@ -285,10 +286,10 @@ async def test_show_battle_renders_status_and_round_actions() -> None:
                 PlayerCard(id=card_id, owner_player_id=player_id, template_id=1)
             )
 
-    await services.start_battle(1, 2)
+    battle = await services.start_battle(1, 2)
 
-    message = Message(from_user=User(1), text="old")
-    await show_battle(message, services, 1)
+    message = Message(from_user=User(battle.first_turn_player_id), text="old")
+    await show_battle(message, services, battle.first_turn_player_id)
 
     assert message.text is not None
     assert "Колода Оппонента" in message.text
@@ -527,9 +528,11 @@ async def test_battle_click_does_not_push_new_status_to_opponent() -> None:
             for event_type, _filters, callback in router.handlers
             if event_type == "callback_query" and callback.__name__ == "battle_actions"
         )
-    await services.start_battle(1, 2)
+    battle = await services.start_battle(1, 2)
 
-    callback = CallbackQuery(from_user=User(1), message=Message(text="old"))
+    callback = CallbackQuery(
+        from_user=User(battle.first_turn_player_id), message=Message(text="old")
+    )
 
     from yuqa.telegram.callbacks import BattleCallback
 
@@ -541,7 +544,7 @@ async def test_battle_click_does_not_push_new_status_to_opponent() -> None:
 
 @pytest.mark.asyncio
 async def test_battle_round_resolution_pushes_one_update_to_opponent() -> None:
-    """The opponent should get one new status message only after the round resolves."""
+    """The opponent should get one new status message when the turn passes."""
 
     services = TelegramServices()
     template = CardTemplate(
@@ -589,11 +592,148 @@ async def test_battle_round_resolution_pushes_one_update_to_opponent() -> None:
 
     bot = SimpleNamespace(send_message=AsyncMock())
     callback = _CallbackWithBot(from_user=User(1), message=Message(text="old"), bot=bot)
+    active_player_id = battle.first_turn_player_id
+    waiting_player_id = battle.opponent_side_for(active_player_id).player_id
+    callback.from_user = User(active_player_id)
 
-    battle = await services.record_battle_action(battle.player_two_id, "attack")
     await battle_actions(callback, BattleCallback(action="attack"))
 
     bot.send_message.assert_awaited_once()
+    sent_args = bot.send_message.await_args.args
+    assert sent_args[0] == waiting_player_id
+    assert "Сейчас твой ход" in sent_args[1]
+
+
+@pytest.mark.asyncio
+async def test_show_battle_switch_falls_back_when_only_one_alive_card_remains() -> None:
+    """The switch screen should not hard-lock the battle when no alternative exists."""
+
+    services = TelegramServices()
+    template = CardTemplate(
+        id=1,
+        name="Рейна",
+        universe=Universe.ORIGINAL,
+        rarity=Rarity.EPIC,
+        image=ImageRef("reina.png"),
+        card_class=CardClass.MELEE,
+        base_stats=StatBlock(10, 20, 5),
+        ascended_stats=StatBlock(15, 25, 8),
+        ability=Ability(cost=0, cooldown=0),
+    )
+    await services.card_templates.add(template)
+    for player_id in (1, 2):
+        player = await services.get_or_create_player(player_id)
+        player.battle_deck = DeckSlots(
+            (
+                player_id * 10 + 1,
+                player_id * 10 + 2,
+                player_id * 10 + 3,
+                player_id * 10 + 4,
+                player_id * 10 + 5,
+            )
+        )
+        for card_id in player.battle_deck.card_ids:
+            await services.player_cards.add(
+                PlayerCard(id=card_id, owner_player_id=player_id, template_id=1)
+            )
+
+    battle = await services.start_battle(1, 2)
+    battle.first_turn_player_id = 1
+    services._set_current_turn_player_id(battle, 1)
+    for card in battle.side_for(1).cards.values():
+        if card.player_card_id != battle.side_for(1).active_card_id:
+            card.current_health = 0
+            card.alive = False
+    await services.battles.save(battle)
+
+    callback = CallbackQuery(from_user=User(1), message=Message(text="old"))
+    await show_battle_switch(callback, services, 1)
+
+    assert callback.message.text is not None
+    buttons = _button_texts(callback.message.reply_markup)
+    assert "⚔️Атака" in buttons
+    assert "🛡️Блок" in buttons
+    assert "🌟Бонус" in buttons
+    assert "⬅️ Назад" not in buttons
+
+
+@pytest.mark.asyncio
+async def test_finished_battle_renders_result_screen() -> None:
+    """A finished battle should render the final win/loss screen."""
+
+    services = TelegramServices()
+    attacker_template = CardTemplate(
+        id=1,
+        name="Атакер",
+        universe=Universe.ORIGINAL,
+        rarity=Rarity.EPIC,
+        image=ImageRef("attacker.png"),
+        card_class=CardClass.MELEE,
+        base_stats=StatBlock(100, 100, 0),
+        ascended_stats=StatBlock(100, 100, 0),
+        ability=Ability(cost=0, cooldown=0),
+    )
+    defender_template = CardTemplate(
+        id=2,
+        name="Защитник",
+        universe=Universe.ORIGINAL,
+        rarity=Rarity.RARE,
+        image=ImageRef("defender.png"),
+        card_class=CardClass.TANK,
+        base_stats=StatBlock(1, 1, 0),
+        ascended_stats=StatBlock(1, 1, 0),
+        ability=Ability(cost=0, cooldown=0),
+    )
+    await services.card_templates.add(attacker_template)
+    await services.card_templates.add(defender_template)
+
+    for player_id, template_id in ((1, 1), (2, 2)):
+        player = await services.get_or_create_player(player_id)
+        player.battle_deck = DeckSlots(
+            (
+                player_id * 10 + 1,
+                player_id * 10 + 2,
+                player_id * 10 + 3,
+                player_id * 10 + 4,
+                player_id * 10 + 5,
+            )
+        )
+        for card_id in player.battle_deck.card_ids:
+            await services.player_cards.add(
+                PlayerCard(
+                    id=card_id,
+                    owner_player_id=player_id,
+                    template_id=template_id,
+                )
+            )
+
+    battle = await services.start_battle(1, 2)
+    battle.first_turn_player_id = 1
+    battle.current_round = 5
+    services._set_current_turn_player_id(battle, 1)
+    defender_side = battle.opponent_side_for(1)
+    for card in defender_side.cards.values():
+        if card.player_card_id != defender_side.active_card_id:
+            card.current_health = 0
+            card.alive = False
+    await services.battles.save(battle)
+    for _ in range(5):
+        battle = await services.record_battle_action(1, "bonus")
+    for _ in range(5):
+        battle = await services.record_battle_action(2, "block")
+    for _ in range(5):
+        battle = await services.record_battle_action(1, "attack")
+    for _ in range(5):
+        battle = await services.record_battle_action(1, "bonus")
+    for _ in range(5):
+        battle = await services.record_battle_action(2, "block")
+
+    message = Message(from_user=User(1), text="old")
+    await show_battle_round(message, services, 1, battle=battle)
+
+    assert message.text is not None
+    assert "Бой завершён" in message.text
+    assert "побед" in message.text.lower()
 
 
 @pytest.mark.asyncio

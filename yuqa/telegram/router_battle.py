@@ -4,7 +4,12 @@ from yuqa.shared.errors import DomainError, ValidationError
 from yuqa.telegram.compat import CommandObject, Message
 from yuqa.telegram.reply import send_alert, send_or_edit
 from yuqa.telegram.router_views import show_battle
-from yuqa.telegram.texts import battle_started_text, battle_status_text, battle_text
+from yuqa.telegram.texts import (
+    battle_result_text,
+    battle_started_text,
+    battle_status_text,
+    battle_text,
+)
 from yuqa.telegram.ui import battle_actions_markup, battle_markup
 
 
@@ -31,6 +36,7 @@ async def start_battle(message: Message, services, command: CommandObject):
         + battle_status_text(
             battle,
             message.from_user.id,
+            current_turn_player_id=summary.current_turn_player_id,
             opponent_spent_action_points=summary.opponent_spent_action_points,
             available_action_points=summary.available_action_points,
             total_action_points=summary.total_action_points,
@@ -43,11 +49,14 @@ async def start_battle(message: Message, services, command: CommandObject):
             can_switch=summary.can_switch,
             ability_cost=summary.ability_cost,
             can_use_ability=(
-                not summary.ability_used
+                summary.is_player_turn
+                and not summary.ability_used
                 and summary.ability_cooldown_remaining <= 0
                 and summary.available_action_points >= summary.ability_cost
             ),
-        ),
+        )
+        if summary.is_player_turn and summary.available_action_points > 0
+        else None,
     )
 
 
@@ -73,6 +82,7 @@ async def search_battle(event, services, player_id: int, bot=None):
         + battle_status_text(
             battle,
             player_id,
+            current_turn_player_id=summary.current_turn_player_id,
             opponent_spent_action_points=summary.opponent_spent_action_points,
             available_action_points=summary.available_action_points,
             total_action_points=summary.total_action_points,
@@ -85,11 +95,14 @@ async def search_battle(event, services, player_id: int, bot=None):
             can_switch=summary.can_switch,
             ability_cost=summary.ability_cost,
             can_use_ability=(
-                not summary.ability_used
+                summary.is_player_turn
+                and not summary.ability_used
                 and summary.ability_cooldown_remaining <= 0
                 and summary.available_action_points >= summary.ability_cost
             ),
-        ),
+        )
+        if summary.is_player_turn and summary.available_action_points > 0
+        else None,
     )
     if bot is not None and hasattr(bot, "send_message"):
         other_id = (
@@ -100,11 +113,16 @@ async def search_battle(event, services, player_id: int, bot=None):
         opponent_summary = services.battle_round_summary(battle, other_id)
         await bot.send_message(
             other_id,
-            battle_started_text(battle)
+            battle_result_text(
+                battle, await services.get_player(other_id) or await services.get_or_create_player(other_id)
+            )
+            if battle.status.value != "active"
+            else battle_started_text(battle)
             + "\n"
             + battle_status_text(
                 battle,
                 other_id,
+                current_turn_player_id=opponent_summary.current_turn_player_id,
                 opponent_spent_action_points=opponent_summary.opponent_spent_action_points,
                 available_action_points=opponent_summary.available_action_points,
                 total_action_points=opponent_summary.total_action_points,
@@ -113,11 +131,16 @@ async def search_battle(event, services, player_id: int, bot=None):
                 bonus_count=opponent_summary.bonus_count,
                 ability_used=opponent_summary.ability_used,
             ),
-            reply_markup=battle_actions_markup(
+            reply_markup=None
+            if battle.status.value != "active"
+            or not opponent_summary.is_player_turn
+            or opponent_summary.available_action_points <= 0
+            else battle_actions_markup(
                 can_switch=opponent_summary.can_switch,
                 ability_cost=opponent_summary.ability_cost,
                 can_use_ability=(
-                    not opponent_summary.ability_used
+                    opponent_summary.is_player_turn
+                    and not opponent_summary.ability_used
                     and opponent_summary.ability_cooldown_remaining <= 0
                     and opponent_summary.available_action_points
                     >= opponent_summary.ability_cost

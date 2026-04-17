@@ -71,6 +71,8 @@ from yuqa.telegram.router_views import (
 from yuqa.telegram.states import ClanCreation, IdeaProposal, ProfileEdit
 from yuqa.telegram.texts import (
     banner_text,
+    battle_result_text,
+    battle_started_text,
     battle_status_text,
     card_level_up_confirm_text,
     card_text,
@@ -661,6 +663,9 @@ def _register_public_callbacks(router: Router, services, settings) -> None:
             return await show_battle(callback, services, player_id)
         previous_round = battle.current_round
         previous_status = battle.status.value
+        previous_turn_player_id = services.battle_round_summary(
+            battle, player_id
+        ).current_turn_player_id
         try:
             if callback_data.action == "back":
                 return await show_battle_round(
@@ -688,7 +693,14 @@ def _register_public_callbacks(router: Router, services, settings) -> None:
             return await send_alert(callback, f"⛔️ {error}")
 
         await show_battle_round(callback, services, player_id, battle=battle)
-        if battle.current_round != previous_round or battle.status.value != previous_status:
+        current_turn_player_id = services.battle_round_summary(
+            battle, player_id
+        ).current_turn_player_id
+        if (
+            battle.current_round != previous_round
+            or battle.status.value != previous_status
+            or current_turn_player_id != previous_turn_player_id
+        ):
             bot = getattr(callback, "bot", None)
             if bot is not None and hasattr(bot, "send_message"):
                 other_id = (
@@ -696,12 +708,20 @@ def _register_public_callbacks(router: Router, services, settings) -> None:
                     if battle.player_one_id == player_id
                     else battle.player_one_id
                 )
+                opponent_player = await services.get_player(other_id)
+                if opponent_player is None:
+                    opponent_player = await services.get_or_create_player(other_id)
                 opponent_summary = services.battle_round_summary(battle, other_id)
                 await bot.send_message(
                     other_id,
-                    battle_status_text(
+                    battle_result_text(battle, opponent_player)
+                    if battle.status.value != "active"
+                    else battle_started_text(battle)
+                    + "\n"
+                    + battle_status_text(
                         battle,
                         other_id,
+                        current_turn_player_id=opponent_summary.current_turn_player_id,
                         opponent_spent_action_points=opponent_summary.opponent_spent_action_points,
                         available_action_points=opponent_summary.available_action_points,
                         total_action_points=opponent_summary.total_action_points,
@@ -710,19 +730,21 @@ def _register_public_callbacks(router: Router, services, settings) -> None:
                         bonus_count=opponent_summary.bonus_count,
                         ability_used=opponent_summary.ability_used,
                     ),
-                    reply_markup=battle_actions_markup(
+                    reply_markup=None
+                    if battle.status.value != "active"
+                    or not opponent_summary.is_player_turn
+                    or opponent_summary.available_action_points <= 0
+                    else battle_actions_markup(
                         can_switch=opponent_summary.can_switch,
                         ability_cost=opponent_summary.ability_cost,
                         can_use_ability=(
-                            not opponent_summary.ability_used
+                            opponent_summary.is_player_turn
+                            and not opponent_summary.ability_used
                             and opponent_summary.ability_cooldown_remaining <= 0
                             and opponent_summary.available_action_points
                             >= opponent_summary.ability_cost
                         ),
-                    )
-                    if battle.status.value == "active"
-                    and opponent_summary.available_action_points > 0
-                    else None,
+                    ),
                 )
 
     @router.callback_query(BattlePassCallback.filter())

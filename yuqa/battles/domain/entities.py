@@ -105,6 +105,7 @@ class Battle:
     player_two_side: BattleSide
     current_round: int = 1
     first_turn_player_id: int | None = None
+    current_turn_player_id: int | None = None
     status: BattleStatus = BattleStatus.WAITING
     winner_id: int | None = None
     created_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))

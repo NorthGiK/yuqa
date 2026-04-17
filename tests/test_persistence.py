@@ -137,6 +137,97 @@ async def test_database_services_clear_battles_on_restart(tmp_path: Path) -> Non
 
 
 @pytest.mark.asyncio
+async def test_database_services_persist_battle_results(tmp_path: Path) -> None:
+    """Finished battle results should survive a database restart."""
+
+    catalog_path = tmp_path / "catalog.json"
+    database_url = _sqlite_url(tmp_path / "yuqa.db")
+    upgrade_head(database_url)
+
+    services = TelegramServices(catalog_path, database_url=database_url)
+    attacker_template = await services.create_card_template(
+        name="Attacker",
+        universe=Universe.ORIGINAL,
+        rarity=Rarity.EPIC,
+        image_key="attacker.png",
+        card_class=CardClass.MELEE,
+        base_stats=StatBlock(100, 100, 0),
+        ascended_stats=StatBlock(100, 100, 0),
+        ability=Ability(0, 0),
+    )
+    defender_template = await services.create_card_template(
+        name="Defender",
+        universe=Universe.ORIGINAL,
+        rarity=Rarity.RARE,
+        image_key="defender.png",
+        card_class=CardClass.TANK,
+        base_stats=StatBlock(1, 1, 0),
+        ascended_stats=StatBlock(1, 1, 0),
+        ability=Ability(0, 0),
+    )
+    for player_id, template_id in ((1, attacker_template.id), (2, defender_template.id)):
+        player = await services.get_or_create_player(player_id)
+        player.battle_deck = DeckSlots(
+            (
+                player_id * 10 + 1,
+                player_id * 10 + 2,
+                player_id * 10 + 3,
+                player_id * 10 + 4,
+                player_id * 10 + 5,
+            )
+        )
+        for card_id in player.battle_deck.card_ids:
+            await services.player_cards.add(
+                PlayerCard(
+                    id=card_id,
+                    owner_player_id=player_id,
+                    template_id=template_id,
+                    current_form=CardForm.BASE,
+                )
+            )
+
+    battle = await services.start_battle(1, 2)
+    battle.first_turn_player_id = 1
+    services._set_current_turn_player_id(battle, 1)
+    battle.current_round = 5
+    defender_side = battle.opponent_side_for(1)
+    for card in defender_side.cards.values():
+        if card.player_card_id != defender_side.active_card_id:
+            card.current_health = 0
+            card.alive = False
+    await services.battles.save(battle)
+    for _ in range(5):
+        battle = await services.record_battle_action(1, "bonus")
+    for _ in range(5):
+        battle = await services.record_battle_action(2, "block")
+    assert battle.current_round == 6
+    for _ in range(5):
+        battle = await services.record_battle_action(1, "attack")
+    for _ in range(5):
+        battle = await services.record_battle_action(1, "bonus")
+    for _ in range(5):
+        battle = await services.record_battle_action(2, "block")
+    assert battle.status.value == "finished"
+
+    await services.shutdown()
+
+    reloaded = TelegramServices(catalog_path, database_url=database_url)
+    player_one = await reloaded.get_player(1)
+    player_two = await reloaded.get_player(2)
+
+    assert player_one is not None
+    assert player_two is not None
+    assert player_one.wins == 1
+    assert player_one.losses == 0
+    assert player_one.draws == 0
+    assert player_two.wins == 0
+    assert player_two.losses == 1
+    assert player_two.draws == 0
+
+    await reloaded.shutdown()
+
+
+@pytest.mark.asyncio
 async def test_database_services_import_legacy_catalog_once(tmp_path: Path) -> None:
     """The first database boot should import the legacy catalog JSON."""
 

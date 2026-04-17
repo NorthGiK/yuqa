@@ -7,6 +7,8 @@ from dataclasses import dataclass
 class BattleRoundSummary:
     """Compact snapshot of a player's current battle choices."""
 
+    current_turn_player_id: int
+    is_player_turn: bool
     attack_count: int
     block_count: int
     bonus_count: int

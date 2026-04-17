@@ -1,5 +1,7 @@
 """Tests for the battle engine."""
 
+import pytest
+
 from yuqa.battles.domain.actions import (
     AttackAction,
     BlockAction,
@@ -22,6 +24,7 @@ from yuqa.shared.enums import (
 )
 from yuqa.shared.value_objects.image_ref import ImageRef
 from yuqa.shared.value_objects.stat_block import StatBlock
+from yuqa.shared.errors import BattleRuleViolationError
 
 
 def make_template():
@@ -145,3 +148,47 @@ def test_battle_engine_finishes_when_last_card_health_reaches_zero():
 
     assert result.battle.status == BattleStatus.FINISHED
     assert result.battle.winner_id == finisher
+
+
+def test_battle_engine_draws_at_round_limit():
+    template = make_template()
+    battle = Battle(
+        id=4,
+        player_one_id=1,
+        player_two_id=2,
+        player_one_side=make_side(1, template, 700),
+        player_two_side=make_side(2, template, 800),
+    )
+    engine = BattleEngine()
+    engine.start_battle(battle)
+    battle.current_round = 100
+
+    result = engine.resolve_round(battle, actions_by_player={1: [], 2: []})
+
+    assert result.battle.status == BattleStatus.FINISHED
+    assert result.battle.winner_id is None
+    assert result.battle.current_round == 100
+
+
+def test_battle_engine_limits_bonus_actions_per_turn():
+    template = make_template()
+    battle = Battle(
+        id=5,
+        player_one_id=1,
+        player_two_id=2,
+        player_one_side=make_side(1, template, 900),
+        player_two_side=make_side(2, template, 1000),
+    )
+    engine = BattleEngine()
+    engine.start_battle(battle)
+    player_id = battle.first_turn_player_id
+    actions = [
+        BonusAction(action_type=BattleActionType.BONUS, ap_cost=1)
+        for _ in range(6)
+    ]
+
+    with pytest.raises(BattleRuleViolationError, match="more than 5 bonuses"):
+        engine.resolve_round(
+            battle,
+            actions_by_player={player_id: actions, 1 if player_id == 2 else 2: []},
+        )

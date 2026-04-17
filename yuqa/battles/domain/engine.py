@@ -28,6 +28,9 @@ class BattlePlanResult:
 class BattleEngine:
     """Resolve a battle round by round."""
 
+    MAX_ROUNDS = 100
+    MAX_BONUSES_PER_TURN = 5
+
     def __init__(self, rng: Random | None = None) -> None:
         self.rng = rng or Random()
 
@@ -38,12 +41,14 @@ class BattleEngine:
         battle.first_turn_player_id = self.rng.choice(
             [battle.player_one_id, battle.player_two_id]
         )
+        battle.current_turn_player_id = battle.first_turn_player_id
         battle.current_round = 1
 
     def resolve_round(
         self,
         battle: Battle,
         actions_by_player: dict[int, list[BattleAction]],
+        bonus_action_points_by_player: dict[int, int] | None = None,
         timed_out_players: set[int] | None = None,
     ) -> BattlePlanResult:
         """Execute one round of planned actions."""
@@ -62,12 +67,23 @@ class BattleEngine:
             if player_id in timed_out_players:
                 continue
             self._resolve_player_actions(
-                battle, player_id, actions_by_player.get(player_id, []), log
+                battle,
+                player_id,
+                actions_by_player.get(player_id, []),
+                log,
+                bonus_action_points_by_player.get(player_id, 0)
+                if bonus_action_points_by_player is not None
+                else None,
             )
         self._tick_effects(battle)
         self._cleanup_dead_cards(battle)
         self._finish_if_needed(battle)
-        battle.current_round += 1
+        if battle.status == BattleStatus.ACTIVE and battle.current_round >= self.MAX_ROUNDS:
+            battle.status = BattleStatus.FINISHED
+            battle.winner_id = None
+            battle.finished_at = datetime.now(timezone.utc)
+        if battle.status == BattleStatus.ACTIVE:
+            battle.current_round += 1
         return BattlePlanResult(battle=battle, log=log)
 
     def _resolve_player_actions(
@@ -76,6 +92,7 @@ class BattleEngine:
         player_id: int,
         actions: list[BattleAction],
         log: list[str],
+        bonus_action_points: int | None = None,
     ) -> None:
         """Resolve one player's action list."""
 
@@ -84,10 +101,19 @@ class BattleEngine:
         bonus_count = sum(
             1 for action in actions if action.action_type == BattleActionType.BONUS
         )
-        round_ap = self._round_ap(battle.current_round) + bonus_count
+        if bonus_count > self.MAX_BONUSES_PER_TURN:
+            raise BattleRuleViolationError(
+                "cannot choose more than 5 bonuses per turn"
+            )
+        round_ap = self._round_ap(battle.current_round)
+        if bonus_action_points is None:
+            round_ap += bonus_count
+        else:
+            round_ap += bonus_action_points
         spent_ap = 0
         used_ability = False
         switched = False
+        attack_damage_total = 0
         for action in actions:
             if action.ap_cost < 0 or action.ap_cost > 5:
                 raise ValidationError("ap_cost must be between 0 and 5")
@@ -135,7 +161,10 @@ class BattleEngine:
             if action.action_type == BattleActionType.ATTACK:
                 if not isinstance(action, AttackAction):
                     raise ValidationError("attack action malformed")
-                self._attack(battle, player_id, log)
+                attacker = side.active_card()
+                if not attacker.alive:
+                    raise BattleRuleViolationError("attacker is dead")
+                attack_damage_total += attacker.damage
                 spent_ap += action.ap_cost
                 continue
             if action.action_type == BattleActionType.BLOCK:
@@ -145,6 +174,8 @@ class BattleEngine:
                 spent_ap += action.ap_cost
                 continue
             raise ValidationError("unsupported action")
+        if attack_damage_total > 0:
+            self._attack(battle, player_id, attack_damage_total, log)
 
     @staticmethod
     def _round_ap(round_number: int) -> int:
@@ -152,16 +183,15 @@ class BattleEngine:
 
         return min(5, round_number)
 
-    def _attack(self, battle: Battle, player_id: int, log: list[str]) -> None:
-        """Deal damage to the opponent's active card."""
+    def _attack(
+        self, battle: Battle, player_id: int, attack_damage: int, log: list[str]
+    ) -> None:
+        """Deal accumulated attack damage to the opponent's active card."""
 
-        attacker = battle.side_for(player_id).active_card()
         defender_side = battle.opponent_side_for(player_id)
         defender_side.ensure_active_alive()
         defender = defender_side.active_card()
-        if not attacker.alive:
-            raise BattleRuleViolationError("attacker is dead")
-        damage = max(0, attacker.damage - defender.defense)
+        damage = max(0, attack_damage - defender.defense)
         defender.current_health -= damage
         log.append(f"player {player_id} attacks for {damage}")
 

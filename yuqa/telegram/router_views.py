@@ -22,6 +22,7 @@ from yuqa.telegram.texts import (
     battle_pass_admin_text,
     battle_pass_seasons_text,
     battle_pass_text,
+    battle_result_text,
     battle_status_text,
     battle_text,
     cards_text,
@@ -385,10 +386,19 @@ async def show_battle_round(
     battle = battle or await services.get_active_battle(player_id)
     if battle is None:
         return await show_battle(event, services, player_id)
+    if battle.status.value != "active":
+        player = await services.get_player(player_id)
+        if player is None:
+            player = await services.get_or_create_player(player_id)
+        text = battle_result_text(battle, player)
+        if prefix is not None:
+            text = prefix + "\n\n" + text
+        return await send_or_edit(event, text, None)
     summary = services.battle_round_summary(battle, player_id)
     text = battle_status_text(
         battle,
         player_id,
+        current_turn_player_id=summary.current_turn_player_id,
         opponent_spent_action_points=summary.opponent_spent_action_points,
         available_action_points=summary.available_action_points,
         total_action_points=summary.total_action_points,
@@ -400,7 +410,11 @@ async def show_battle_round(
     if prefix is not None:
         text = prefix + "\n\n" + text
     markup = None
-    if battle.status.value == "active" and summary.available_action_points > 0:
+    if (
+        battle.status.value == "active"
+        and summary.is_player_turn
+        and summary.available_action_points > 0
+    ):
         markup = battle_actions_markup(
             can_switch=summary.can_switch,
             ability_cost=summary.ability_cost,
@@ -420,7 +434,7 @@ async def show_battle_switch(event, services, player_id: int):
     if battle is None:
         return await show_battle(event, services, player_id)
     cards = _battle_switch_cards(battle, player_id)
-    if not cards:
+    if len(cards) <= 1:
         return await show_battle_round(event, services, player_id, battle=battle)
     summary = services.battle_round_summary(battle, player_id)
     if battle.status.value != "active":
@@ -430,6 +444,7 @@ async def show_battle_switch(event, services, player_id: int):
         battle_status_text(
             battle,
             player_id,
+            current_turn_player_id=summary.current_turn_player_id,
             opponent_spent_action_points=summary.opponent_spent_action_points,
             available_action_points=summary.available_action_points,
             total_action_points=summary.total_action_points,

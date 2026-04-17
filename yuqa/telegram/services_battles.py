@@ -48,6 +48,7 @@ class BattleServiceMixin:
         )
         self.battle_engine.start_battle(battle)
         await self.battles.add(battle)
+        self._set_current_turn_player_id(battle, battle.first_turn_player_id)
         self._start_battle_round(battle)
         return battle
 
@@ -78,10 +79,10 @@ class BattleServiceMixin:
             [],
         )
 
-    def _battle_round_summary(
+    def _battle_round_totals(
         self, battle: Battle, player_id: int
-    ) -> BattleRoundSummary:
-        """Summarize one player's draft for the current round."""
+    ) -> tuple[int, int, int, bool, int]:
+        """Return the current draft totals for one player."""
 
         actions = self.battle_action_drafts.get(
             self._battle_round_key(battle.id, battle.current_round, player_id),
@@ -102,25 +103,129 @@ class BattleServiceMixin:
                 bonus_count += 1
             elif action.action_type == BattleActionType.USE_ABILITY:
                 ability_used = True
+        return attack_count, block_count, bonus_count, ability_used, spent_ap
+
+    def _bonus_carryover_points(self, battle: Battle, player_id: int) -> int:
+        """Return bonus AP granted from the previous resolved round."""
+
+        return self.battle_bonus_carryover.get(
+            self._battle_round_key(battle.id, battle.current_round, player_id),
+            0,
+        )
+
+    def _set_current_turn_player_id(self, battle: Battle, player_id: int) -> None:
+        """Remember which player may currently draft actions."""
+
+        self.battle_current_turn_player_ids[battle.id] = player_id
+        battle.current_turn_player_id = player_id
+
+    def _battle_action_lock(self, battle_id: int) -> asyncio.Lock:
+        """Return a per-battle lock used to serialize combat mutations."""
+
+        lock = self.battle_action_locks.get(battle_id)
+        if lock is None:
+            lock = asyncio.Lock()
+            self.battle_action_locks[battle_id] = lock
+        return lock
+
+    def _has_switch_target(self, battle: Battle, player_id: int) -> bool:
+        """Return True when the player can switch to a different alive card."""
+
+        side = battle.side_for(player_id)
+        return any(
+            card.alive and card.player_card_id != side.active_card_id
+            for card in side.cards.values()
+        )
+
+    def _current_turn_player_id(self, battle: Battle) -> int:
+        """Return the player who is currently allowed to draft actions."""
+
+        first_player_id = battle.first_turn_player_id or battle.player_one_id
+        opponent_id = battle.opponent_side_for(first_player_id).player_id
+        first_total_action_points = (
+            self._base_round_ap(battle.current_round)
+            + self._bonus_carryover_points(battle, first_player_id)
+        )
+        opponent_total_action_points = (
+            self._base_round_ap(battle.current_round)
+            + self._bonus_carryover_points(battle, opponent_id)
+        )
+        (
+            _first_attack_count,
+            _first_block_count,
+            _first_bonus_count,
+            _first_ability_used,
+            first_spent_ap,
+        ) = self._battle_round_totals(battle, first_player_id)
+        (
+            _opponent_attack_count,
+            _opponent_block_count,
+            _opponent_bonus_count,
+            _opponent_ability_used,
+            opponent_spent_ap,
+        ) = self._battle_round_totals(battle, opponent_id)
+        inferred_turn_player_id = (
+            first_player_id
+            if first_spent_ap < first_total_action_points
+            else opponent_id
+            if opponent_spent_ap < opponent_total_action_points
+            else None
+        )
+        current_turn_player_id = self.battle_current_turn_player_ids.get(battle.id)
+        if (
+            inferred_turn_player_id is not None
+            and current_turn_player_id == inferred_turn_player_id
+        ):
+            battle.current_turn_player_id = current_turn_player_id
+            return current_turn_player_id
+        if inferred_turn_player_id is not None:
+            battle.current_turn_player_id = inferred_turn_player_id
+            self.battle_current_turn_player_ids[battle.id] = inferred_turn_player_id
+            return inferred_turn_player_id
+        if current_turn_player_id in {battle.player_one_id, battle.player_two_id}:
+            battle.current_turn_player_id = current_turn_player_id
+            return current_turn_player_id
+        battle.current_turn_player_id = first_player_id
+        self.battle_current_turn_player_ids[battle.id] = first_player_id
+        return first_player_id
+
+    def _battle_round_summary(
+        self, battle: Battle, player_id: int
+    ) -> BattleRoundSummary:
+        """Summarize one player's draft for the current round."""
+
+        (
+            attack_count,
+            block_count,
+            bonus_count,
+            ability_used,
+            spent_ap,
+        ) = self._battle_round_totals(battle, player_id)
+        actions = self.battle_action_drafts.get(
+            self._battle_round_key(battle.id, battle.current_round, player_id),
+            [],
+        )
         active_card = battle.side_for(player_id).active_card()
         ability_cost = active_card.template.ability_for(active_card.form).cost
         ability_cooldown_remaining = active_card.ability_cooldown_remaining
         base_ap = self._base_round_ap(battle.current_round)
-        total_action_points = base_ap + bonus_count
+        carryover_bonus = self._bonus_carryover_points(battle, player_id)
+        total_action_points = base_ap + carryover_bonus
         available_action_points = max(0, total_action_points - spent_ap)
-        opponent_actions = self.battle_action_drafts.get(
-            self._battle_round_key(
-                battle.id,
-                battle.current_round,
-                battle.opponent_side_for(player_id).player_id,
-            ),
-            [],
-        )
-        opponent_spent_ap = 0
-        for action in opponent_actions:
-            if action.action_type != BattleActionType.BONUS:
-                opponent_spent_ap += action.ap_cost
+        opponent_id = battle.opponent_side_for(player_id).player_id
+        (
+            _opponent_attacks,
+            _opponent_blocks,
+            _opponent_bonuses,
+            _opponent_ability_used,
+            opponent_spent_ap,
+        ) = self._battle_round_totals(battle, opponent_id)
+        current_turn_player_id = self._current_turn_player_id(battle)
+        if player_id != current_turn_player_id:
+            available_action_points = 0
         return BattleRoundSummary(
+            current_turn_player_id=current_turn_player_id,
+            is_player_turn=player_id == current_turn_player_id,
             attack_count=attack_count,
             block_count=block_count,
             bonus_count=bonus_count,
@@ -130,8 +235,29 @@ class BattleServiceMixin:
             opponent_spent_action_points=opponent_spent_ap,
             ability_cost=ability_cost,
             ability_cooldown_remaining=ability_cooldown_remaining,
-            can_switch=not actions and available_action_points > 0,
+            can_switch=not actions
+            and available_action_points > 0
+            and self._has_switch_target(battle, player_id),
         )
+
+    async def _apply_battle_result(self, battle: Battle) -> None:
+        """Persist the final win/loss/draw outcome for both players."""
+
+        if battle.status.value != "finished":
+            return
+        player_one = await self.get_or_create_player(battle.player_one_id)
+        player_two = await self.get_or_create_player(battle.player_two_id)
+        if battle.winner_id is None:
+            player_one.add_draw()
+            player_two.add_draw()
+        elif battle.winner_id == battle.player_one_id:
+            player_one.add_win()
+            player_two.add_loss()
+        else:
+            player_two.add_win()
+            player_one.add_loss()
+        await self.players.save(player_one)
+        await self.players.save(player_two)
 
     def battle_round_summary(
         self, battle: Battle, player_id: int
@@ -160,6 +286,13 @@ class BattleServiceMixin:
             for key, value in self.battle_inactive_rounds.items()
             if key[0] != battle_id
         }
+        self.battle_bonus_carryover = {
+            key: value
+            for key, value in self.battle_bonus_carryover.items()
+            if key[0] != battle_id
+        }
+        self.battle_current_turn_player_ids.pop(battle_id, None)
+        self.battle_action_locks.pop(battle_id, None)
 
     def _clear_all_battles(self) -> None:
         """Remove every stored battle, queue entry, and round draft."""
@@ -169,6 +302,9 @@ class BattleServiceMixin:
         if self.search_queue:
             self.search_queue.clear()
         self.battle_action_drafts.clear()
+        self.battle_bonus_carryover.clear()
+        self.battle_current_turn_player_ids.clear()
+        self.battle_action_locks.clear()
         for battle_id in list(self.battle_timeout_tasks):
             self._cancel_battle_timeout_task(battle_id)
         self.battle_round_started_at.clear()
@@ -177,8 +313,9 @@ class BattleServiceMixin:
             self.store.save()
 
     def _start_battle_round(self, battle: Battle) -> None:
-        """Remember the current round start and optionally schedule a timeout."""
+        """Remember the current phase start and optionally schedule a timeout."""
 
+        self._current_turn_player_id(battle)
         self.battle_round_started_at[battle.id] = datetime.now(timezone.utc)
         self._cancel_battle_timeout_task(battle.id)
         if not self.enable_background_battle_timers:
@@ -191,7 +328,7 @@ class BattleServiceMixin:
         """Cancel the background timeout task for one battle."""
 
         task = self.battle_timeout_tasks.pop(battle_id, None)
-        if task is not None:
+        if task is not None and task is not asyncio.current_task():
             task.cancel()
 
     async def _battle_round_timeout_worker(
@@ -204,24 +341,34 @@ class BattleServiceMixin:
             battle = await self.battles.get_by_id(battle_id)
             if battle is None or battle.status.value != "active":
                 return
-            if battle.current_round != round_number:
-                return
-            battle = await self._resolve_current_round(
-                battle,
-                notify_timeout=False,
-            )
+            async with self._battle_action_lock(battle_id):
+                battle = await self.battles.get_by_id(battle_id)
+                if battle is None or battle.status.value != "active":
+                    return
+                if battle.current_round != round_number:
+                    return
+                current_turn_player_id = self._current_turn_player_id(battle)
+                if current_turn_player_id == battle.first_turn_player_id:
+                    battle = await self._advance_battle_turn(
+                        battle, notify_timeout=False
+                    )
+                else:
+                    battle = await self._resolve_current_round(
+                        battle,
+                        notify_timeout=False,
+                    )
             if (
                 battle.status.value == "active"
                 and self.battle_timeout_notifier is not None
             ):
                 await self.battle_timeout_notifier(
                     battle,
-                    reason="⌛ Время на раунд вышло. Новый раунд уже начался.",
+                    reason="⌛ Время на ход вышло. Новый ход уже начался.",
                 )
             elif self.battle_timeout_notifier is not None:
                 await self.battle_timeout_notifier(
                     battle,
-                    reason="⌛ Время на раунд вышло. Бой завершён.",
+                    reason="⌛ Время на ход вышло. Бой завершён.",
                 )
         except asyncio.CancelledError:
             raise
@@ -242,8 +389,29 @@ class BattleServiceMixin:
         return await self._resolve_current_round(
             battle,
             notify_timeout=False,
-            reason="⌛ Время на раунд вышло. Раунд завершён автоматически.",
+            reason="⌛ Время на ход вышло. Раунд завершён автоматически.",
         )
+
+    async def _advance_battle_turn(
+        self,
+        battle: Battle,
+        *,
+        notify_timeout: bool,
+        reason: str | None = None,
+    ) -> Battle:
+        """Pass the current round from the first player to the second player."""
+
+        if battle.status.value != "active":
+            return battle
+        current_turn_player_id = self._current_turn_player_id(battle)
+        next_player_id = battle.opponent_side_for(current_turn_player_id).player_id
+        self._set_current_turn_player_id(battle, next_player_id)
+        self._start_battle_round(battle)
+        await self.battles.save(battle)
+        if notify_timeout and self.battle_timeout_notifier is not None:
+            with suppress(Exception):
+                await self.battle_timeout_notifier(battle, reason=reason)
+        return battle
 
     async def _resolve_current_round(
         self,
@@ -272,14 +440,39 @@ class BattleServiceMixin:
                 )
             ),
         }
-        result = self.battle_engine.resolve_round(battle, actions_by_player)
+        carryover_action_points_by_player = {
+            player_id: self._bonus_carryover_points(battle, player_id)
+            for player_id in actions_by_player
+        }
+        result = self.battle_engine.resolve_round(
+            battle,
+            actions_by_player,
+            bonus_action_points_by_player=carryover_action_points_by_player,
+        )
+        next_round = result.battle.current_round
+        self.battle_bonus_carryover = {
+            key: value
+            for key, value in self.battle_bonus_carryover.items()
+            if key[0] != battle.id or key[1] == next_round
+        }
+        for player_id, actions in actions_by_player.items():
+            bonus_count = sum(
+                1 for action in actions if action.action_type == BattleActionType.BONUS
+            )
+            self.battle_bonus_carryover[
+                self._battle_round_key(battle.id, next_round, player_id)
+            ] = bonus_count
         self._apply_inactive_round_penalty(result.battle, actions_by_player)
         self._clear_battle_round_drafts(result.battle.id)
         await self.battles.save(result.battle)
         if result.battle.status.value == "active":
+            self._set_current_turn_player_id(
+                result.battle, result.battle.first_turn_player_id
+            )
             self._start_battle_round(result.battle)
         else:
             self._clear_battle_runtime_state(result.battle.id)
+            await self._apply_battle_result(result.battle)
         if notify_timeout and self.battle_timeout_notifier is not None:
             with suppress(Exception):
                 await self.battle_timeout_notifier(result.battle, reason=reason)
@@ -327,76 +520,97 @@ class BattleServiceMixin:
         battle = await self.get_active_battle(player_id)
         if battle is None:
             raise EntityNotFoundError("battle not found")
-        battle = await self._resolve_expired_round_if_needed(battle)
-        if battle.status.value != "active":
-            return battle
-        summary = self._battle_round_summary(battle, player_id)
-        actions = self._battle_round_actions(battle.id, battle.current_round, player_id)
-        if action == "switch" and actions:
-            raise BattleRuleViolationError(
-                "switch can be used only as the first choice"
+        async with self._battle_action_lock(battle.id):
+            battle = await self._resolve_expired_round_if_needed(battle)
+            if battle.status.value != "active":
+                return battle
+            summary = self._battle_round_summary(battle, player_id)
+            if not summary.is_player_turn:
+                raise BattleRuleViolationError("wait for your turn")
+            actions = self._battle_round_actions(
+                battle.id, battle.current_round, player_id
             )
-        if action == "attack":
-            if summary.available_action_points < 1:
-                raise BattleRuleViolationError("not enough action points")
-            actions.append(AttackAction(action_type=BattleActionType.ATTACK, ap_cost=1))
-        elif action == "block":
-            if summary.available_action_points < 1:
-                raise BattleRuleViolationError("not enough action points")
-            actions.append(BlockAction(action_type=BattleActionType.BLOCK, ap_cost=1))
-        elif action == "bonus":
-            if summary.bonus_count >= self._base_round_ap(battle.current_round):
-                raise BattleRuleViolationError("not enough action points")
-            actions.append(BonusAction(action_type=BattleActionType.BONUS, ap_cost=1))
-        elif action == "ability":
-            if summary.ability_used:
+            if action == "switch" and actions:
                 raise BattleRuleViolationError(
-                    "ability can be used only once per round"
+                    "switch can be used only as the first choice"
                 )
-            if summary.ability_cooldown_remaining > 0:
-                raise BattleRuleViolationError("ability is on cooldown")
-            if summary.available_action_points < summary.ability_cost:
-                raise BattleRuleViolationError(
-                    "Не достаточно Очков Действия для способности"
+            if action == "attack":
+                if summary.available_action_points < 1:
+                    raise BattleRuleViolationError("not enough action points")
+                actions.append(
+                    AttackAction(action_type=BattleActionType.ATTACK, ap_cost=1)
                 )
-            active_card = battle.side_for(player_id).active_card()
-            actions.append(
-                UseAbilityAction(
-                    action_type=BattleActionType.USE_ABILITY,
-                    ap_cost=summary.ability_cost,
-                    player_card_id=active_card.player_card_id,
+            elif action == "block":
+                if summary.available_action_points < 1:
+                    raise BattleRuleViolationError("not enough action points")
+                actions.append(
+                    BlockAction(action_type=BattleActionType.BLOCK, ap_cost=1)
                 )
-            )
-        elif action == "switch":
-            if card_id is None:
-                raise ValidationError("switch requires card_id")
-            if summary.available_action_points < 1:
-                raise BattleRuleViolationError("not enough action points")
-            side = battle.side_for(player_id)
-            card = side.cards.get(card_id)
-            if card is None or not card.alive:
-                raise BattleRuleViolationError("cannot switch to dead/unknown card")
-            actions.append(
-                SwitchCardAction(
-                    action_type=BattleActionType.SWITCH_CARD,
-                    ap_cost=1,
-                    new_active_card_id=card_id,
+            elif action == "bonus":
+                if summary.available_action_points < 1:
+                    raise BattleRuleViolationError("not enough action points")
+                if summary.bonus_count >= self.battle_engine.MAX_BONUSES_PER_TURN:
+                    raise BattleRuleViolationError(
+                        "cannot choose more than 5 bonuses per turn"
+                    )
+                actions.append(
+                    BonusAction(action_type=BattleActionType.BONUS, ap_cost=1)
                 )
-            )
-        else:
-            raise ValidationError("unsupported battle action")
+            elif action == "ability":
+                if summary.ability_used:
+                    raise BattleRuleViolationError(
+                        "ability can be used only once per round"
+                    )
+                if summary.ability_cooldown_remaining > 0:
+                    raise BattleRuleViolationError("ability is on cooldown")
+                if summary.available_action_points < summary.ability_cost:
+                    raise BattleRuleViolationError(
+                        "Не достаточно Очков Действия для способности"
+                    )
+                active_card = battle.side_for(player_id).active_card()
+                actions.append(
+                    UseAbilityAction(
+                        action_type=BattleActionType.USE_ABILITY,
+                        ap_cost=summary.ability_cost,
+                        player_card_id=active_card.player_card_id,
+                    )
+                )
+            elif action == "switch":
+                if card_id is None:
+                    raise ValidationError("switch requires card_id")
+                if summary.available_action_points < 1:
+                    raise BattleRuleViolationError("not enough action points")
+                side = battle.side_for(player_id)
+                card = side.cards.get(card_id)
+                if card is None or not card.alive:
+                    raise BattleRuleViolationError(
+                        "cannot switch to dead/unknown card"
+                    )
+                actions.append(
+                    SwitchCardAction(
+                        action_type=BattleActionType.SWITCH_CARD,
+                        ap_cost=1,
+                        new_active_card_id=card_id,
+                    )
+                )
+            else:
+                raise ValidationError("unsupported battle action")
 
-        if self._battle_round_summary(battle, player_id).available_action_points > 0:
-            await self.battles.save(battle)
-            return battle
+            current_summary = self._battle_round_summary(battle, player_id)
+            if current_summary.available_action_points > 0:
+                self._start_battle_round(battle)
+                await self.battles.save(battle)
+                return battle
 
-        opponent_id = battle.opponent_side_for(player_id).player_id
-        opponent_summary = self._battle_round_summary(battle, opponent_id)
-        if opponent_summary.available_action_points > 0:
-            await self.battles.save(battle)
-            return battle
+            if player_id == battle.first_turn_player_id:
+                self._set_current_turn_player_id(
+                    battle, battle.opponent_side_for(player_id).player_id
+                )
+                self._start_battle_round(battle)
+                await self.battles.save(battle)
+                return battle
 
-        return await self._resolve_current_round(battle, notify_timeout=False)
+            return await self._resolve_current_round(battle, notify_timeout=False)
 
     async def search_battle(self, telegram_id: int) -> Battle | None:
         """Join the matchmaking queue and start a battle when possible."""

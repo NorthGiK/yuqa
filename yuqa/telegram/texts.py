@@ -9,6 +9,7 @@ from yuqa.telegram.texts_admin import (
 from yuqa.telegram.texts_battle import (
     _battle_card_line,
     battle_started_text,
+    battle_result_text,
     battle_status_text,
     battle_text,
 )
@@ -87,6 +88,7 @@ __all__ = [
     "battle_pass_seasons_text",
     "battle_pass_text",
     "battle_started_text",
+    "battle_result_text",
     "battle_status_text",
     "battle_text",
     "card_level_up_confirm_text",

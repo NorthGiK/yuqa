@@ -45,6 +45,7 @@ def battle_status_text(
     battle: Battle,
     player_id: int,
     *,
+    current_turn_player_id: int,
     opponent_spent_action_points: int,
     available_action_points: int,
     total_action_points: int,
@@ -69,8 +70,15 @@ def battle_status_text(
             card, active=card.player_card_id == player_side.active_card_id
         )
         for card in player_side.cards.values()
+        if card.alive
+    )
+    turn_text = (
+        "👉 <b>Сейчас твой ход</b>"
+        if current_turn_player_id == player_id
+        else "⏳ <b>Ход соперника, жди окончания его набора действий</b>"
     )
     return (
+        f"{turn_text}\n\n"
         "🪖Колода Оппонента:\n"
         f"Потрачено ОД в раунде {opponent_spent_action_points}\n"
         f"{opponent_cards}\n\n"
@@ -85,8 +93,32 @@ def battle_status_text(
     )
 
 
+def battle_result_text(battle: Battle, player: Player) -> str:
+    """Render the final battle result for one player."""
+
+    if battle.winner_id is None:
+        outcome = "🤝 <b>Ничья</b>"
+        status = "Результат: ничья"
+    elif battle.winner_id == player.telegram_id:
+        outcome = "🏆 <b>Ты победил</b>"
+        status = "Результат: победа"
+    else:
+        outcome = "💀 <b>Ты проиграл</b>"
+        status = "Результат: поражение"
+    return (
+        "🏁 <b>Бой завершён</b>\n"
+        f"{outcome}\n"
+        f"{status}\n"
+        f"🆔 <b>Бой:</b> <code>{battle.id}</code>\n"
+        f"👤 <b>Игрок:</b> <code>{player.telegram_id}</code>\n"
+        f"🔥 <b>Победы/Проигрыши/Ничьи:</b> <code>{player.wins}/{player.losses}/{player.draws}</code>\n"
+        f"📈 <b>Рейтинг:</b> <code>{player.rating}</code>"
+    )
+
+
 __all__ = [
     "battle_started_text",
+    "battle_result_text",
     "battle_status_text",
     "battle_text",
 ]

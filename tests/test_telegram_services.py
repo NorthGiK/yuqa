@@ -228,7 +228,7 @@ async def test_battle_can_start_and_is_saved(sample_template: CardTemplate) -> N
 async def test_battle_round_actions_enforce_points_and_switch_rules(
     sample_template: CardTemplate,
 ) -> None:
-    """Battle drafts should reject dead-card switches and AP overuse."""
+    """Battle selection should reject invalid switches and pass the turn after one pick."""
 
     services = TelegramServices()
     await services.card_templates.add(sample_template)
@@ -257,7 +257,7 @@ async def test_battle_round_actions_enforce_points_and_switch_rules(
             )
 
     battle = await services.start_battle(1, 2)
-    player_id = battle.player_one_id
+    player_id = battle.first_turn_player_id
     before_summary = services.battle_round_summary(battle, player_id)
     active_card_id = battle.side_for(player_id).active_card_id
     dead_card = next(
@@ -275,23 +275,30 @@ async def test_battle_round_actions_enforce_points_and_switch_rules(
     battle = await services.record_battle_action(player_id, "bonus")
     after_bonus = services.battle_round_summary(battle, player_id)
     assert before_summary.available_action_points == 1
-    assert after_bonus.available_action_points == 1
-    assert after_bonus.total_action_points == 2
+    assert after_bonus.available_action_points == 0
+    assert after_bonus.total_action_points == 1
     assert after_bonus.opponent_spent_action_points == 0
+    assert not after_bonus.is_player_turn
 
-    other_id = battle.player_two_id
+    other_id = battle.opponent_side_for(player_id).player_id
+    with pytest.raises(BattleRuleViolationError, match="wait for your turn"):
+        await services.record_battle_action(player_id, "attack")
+    other_summary = services.battle_round_summary(battle, other_id)
+    assert other_summary.available_action_points == 1
+    assert other_summary.is_player_turn
     battle = await services.record_battle_action(other_id, "attack")
-    battle = await services.record_battle_action(player_id, "attack")
-    battle = await services.record_battle_action(player_id, "attack")
+    after_attack = services.battle_round_summary(battle, other_id)
+    assert after_attack.available_action_points == 0
+    assert not after_attack.is_player_turn
     assert battle.current_round == 2
     assert battle.status == BattleStatus.ACTIVE
 
 
 @pytest.mark.asyncio
-async def test_battle_round_timeout_auto_resolves_current_round(
+async def test_battle_round_timeout_advances_turn_then_resolves_round(
     sample_template: CardTemplate,
 ) -> None:
-    """A round should auto-resolve after the configured timeout."""
+    """A timeout should pass the turn first, then resolve the round on the next timeout."""
 
     services = TelegramServices()
     services.enable_background_battle_timers = True
@@ -322,20 +329,25 @@ async def test_battle_round_timeout_auto_resolves_current_round(
             )
 
     battle = await services.start_battle(1, 2)
-    await services.record_battle_action(battle.player_one_id, "attack")
+    await services.record_battle_action(battle.first_turn_player_id, "attack")
     await asyncio.sleep(0.05)
 
-    battle = await services.get_active_battle(battle.player_one_id)
+    battle = await services.get_active_battle(battle.first_turn_player_id)
+    assert battle is not None
+    assert battle.current_round >= 2
+
+    await asyncio.sleep(0.05)
+    battle = await services.get_active_battle(battle.first_turn_player_id)
     assert battle is not None
     assert battle.current_round >= 2
     await services.shutdown()
 
 
 @pytest.mark.asyncio
-async def test_player_loses_active_card_after_fifteen_rounds_without_attacks(
+async def test_player_loses_active_card_after_more_than_ten_rounds_without_attacks(
     sample_template: CardTemplate,
 ) -> None:
-    """Too many passive rounds should kill the current active card."""
+    """More than ten passive rounds should kill the current active card."""
 
     services = TelegramServices()
     await services.card_templates.add(sample_template)
@@ -367,12 +379,12 @@ async def test_player_loses_active_card_after_fifteen_rounds_without_attacks(
     player_one_active = battle.player_one_side.active_card_id
     player_two_active = battle.player_two_side.active_card_id
 
-    for _ in range(services.battle_inactive_round_limit):
+    for _ in range(services.battle_inactive_round_limit + 1):
         round_number = battle.current_round
         while battle.current_round == round_number:
             if services.battle_round_summary(
                 battle, battle.player_one_id
-            ).available_action_points > 0:
+            ).is_player_turn:
                 battle = await services.record_battle_action(
                     battle.player_one_id, "block"
                 )
@@ -380,7 +392,7 @@ async def test_player_loses_active_card_after_fifteen_rounds_without_attacks(
                     break
             if services.battle_round_summary(
                 battle, battle.player_two_id
-            ).available_action_points > 0:
+            ).is_player_turn:
                 battle = await services.record_battle_action(
                     battle.player_two_id, "block"
                 )
@@ -395,7 +407,7 @@ async def test_player_loses_active_card_after_fifteen_rounds_without_attacks(
 async def test_battle_ability_can_only_be_used_once_per_round(
     sample_template: CardTemplate,
 ) -> None:
-    """A player should not be able to fire the active card ability twice."""
+    """A player should not be able to pick another action after using an ability."""
 
     services = TelegramServices()
     await services.card_templates.add(sample_template)
@@ -424,11 +436,69 @@ async def test_battle_ability_can_only_be_used_once_per_round(
             )
 
     battle = await services.start_battle(1, 2)
-    player_id = battle.player_one_id
+    player_id = battle.first_turn_player_id
 
     battle = await services.record_battle_action(player_id, "ability")
     with pytest.raises(BattleRuleViolationError):
         await services.record_battle_action(player_id, "ability")
+
+
+@pytest.mark.asyncio
+async def test_battle_actions_after_ability_still_count_in_same_turn() -> None:
+    """Ability use should not block follow-up attack, block, or bonus actions."""
+
+    services = TelegramServices()
+    template = CardTemplate(
+        id=1,
+        name="Hero",
+        universe=Universe.ORIGINAL,
+        rarity=Rarity.EPIC,
+        image=ImageRef("hero.png"),
+        card_class=CardClass.MELEE,
+        base_stats=StatBlock(10, 10, 0),
+        ascended_stats=StatBlock(10, 10, 0),
+        ability=Ability(cost=0, cooldown=0),
+    )
+    await services.card_templates.add(template)
+
+    for player_id in (1, 2):
+        player = await services.get_or_create_player(player_id)
+        player.battle_deck = DeckSlots(
+            (
+                player_id * 10 + 1,
+                player_id * 10 + 2,
+                player_id * 10 + 3,
+                player_id * 10 + 4,
+                player_id * 10 + 5,
+            )
+        )
+        for card_id in player.battle_deck.card_ids:
+            await services.player_cards.add(
+                PlayerCard(
+                    id=card_id,
+                    owner_player_id=player_id,
+                    template_id=1,
+                    level=1,
+                    copies_owned=1,
+                    current_form=CardForm.BASE,
+                )
+            )
+
+    battle = await services.start_battle(1, 2)
+    player_id = battle.first_turn_player_id
+    battle.current_round = 5
+    await services.battles.save(battle)
+    battle = await services.record_battle_action(player_id, "ability")
+    battle = await services.record_battle_action(player_id, "attack")
+    battle = await services.record_battle_action(player_id, "block")
+    battle = await services.record_battle_action(player_id, "bonus")
+    summary = services.battle_round_summary(battle, player_id)
+
+    assert summary.is_player_turn
+    assert summary.attack_count == 1
+    assert summary.block_count == 1
+    assert summary.bonus_count == 1
+    assert summary.available_action_points == 2
 
 
 @pytest.mark.asyncio
@@ -477,10 +547,11 @@ async def test_battle_ability_respects_cross_round_cooldown() -> None:
             )
 
     battle = await services.start_battle(1, 2)
-    player_id = battle.player_one_id
-    other_id = battle.player_two_id
+    player_id = battle.first_turn_player_id
+    other_id = battle.opponent_side_for(player_id).player_id
 
     battle = await services.record_battle_action(player_id, "ability")
+    battle = await services.record_battle_action(player_id, "attack")
     battle = await services.record_battle_action(other_id, "attack")
 
     with pytest.raises(BattleRuleViolationError):
@@ -488,8 +559,13 @@ async def test_battle_ability_respects_cross_round_cooldown() -> None:
 
     battle = await services.record_battle_action(player_id, "attack")
     while battle.current_round == 2 and battle.status == BattleStatus.ACTIVE:
-        battle = await services.record_battle_action(other_id, "attack")
-        if battle.current_round == 2 and battle.status == BattleStatus.ACTIVE:
+        if services.battle_round_summary(battle, other_id).is_player_turn:
+            battle = await services.record_battle_action(other_id, "attack")
+        if (
+            battle.current_round == 2
+            and battle.status == BattleStatus.ACTIVE
+            and services.battle_round_summary(battle, player_id).is_player_turn
+        ):
             battle = await services.record_battle_action(player_id, "attack")
 
     assert services.battle_round_summary(battle, player_id).ability_cooldown_remaining == 0
@@ -531,16 +607,16 @@ async def test_click_after_round_timeout_moves_to_new_round_and_accepts_action(
     battle = await services.start_battle(1, 2)
     await asyncio.sleep(0.02)
 
-    battle = await services.record_battle_action(battle.player_one_id, "attack")
+    battle = await services.record_battle_action(battle.first_turn_player_id, "attack")
 
     assert battle.current_round >= 2
-    summary = services.battle_round_summary(battle, battle.player_one_id)
+    summary = services.battle_round_summary(battle, battle.first_turn_player_id)
     assert summary.attack_count == 1
 
 
 @pytest.mark.asyncio
-async def test_bonus_actions_expand_total_round_budget_to_ten() -> None:
-    """Five bonuses in round five should grow the round budget from 5 to 10."""
+async def test_bonus_actions_apply_on_the_next_round_budget() -> None:
+    """Bonus AP should become available only in the following round."""
 
     services = TelegramServices()
     template = CardTemplate(
@@ -583,18 +659,34 @@ async def test_bonus_actions_expand_total_round_budget_to_ten() -> None:
     battle.current_round = 5
     await services.battles.save(battle)
 
+    player_id = battle.first_turn_player_id
+    other_id = battle.opponent_side_for(player_id).player_id
     for _ in range(5):
-        battle = await services.record_battle_action(battle.player_one_id, "bonus")
+        battle = await services.record_battle_action(player_id, "bonus")
 
-    summary = services.battle_round_summary(battle, battle.player_one_id)
+    summary = services.battle_round_summary(battle, player_id)
     assert summary.bonus_count == 5
-    assert summary.total_action_points == 10
-    assert summary.available_action_points == 5
+    assert summary.total_action_points == 5
+    assert summary.available_action_points == 0
+    assert not summary.is_player_turn
+    for _ in range(5):
+        battle = await services.record_battle_action(other_id, "block")
+
+    next_summary = services.battle_round_summary(battle, player_id)
+    assert battle.current_round == 6
+    assert next_summary.total_action_points == 10
+    assert next_summary.available_action_points == 10
+    assert next_summary.is_player_turn
+    assert services.battle_round_summary(battle, other_id).available_action_points == 0
+    for _ in range(5):
+        battle = await services.record_battle_action(player_id, "bonus")
+    with pytest.raises(BattleRuleViolationError, match="more than 5 bonuses"):
+        await services.record_battle_action(player_id, "bonus")
 
 
 @pytest.mark.asyncio
-async def test_five_bonus_and_five_attack_actions_apply_damage() -> None:
-    """A round with five bonuses and five attacks should still resolve attack damage."""
+async def test_bonus_carryover_keeps_attack_damage_calculation_correct() -> None:
+    """Bonus AP should carry into the next round while attacks ignore defense once."""
 
     services = TelegramServices()
     attacker_template = CardTemplate(
@@ -650,26 +742,331 @@ async def test_five_bonus_and_five_attack_actions_apply_damage() -> None:
         )
 
     battle = await services.start_battle(1, 2)
+    battle.first_turn_player_id = 1
+    services._set_current_turn_player_id(battle, 1)
     battle.current_round = 5
     await services.battles.save(battle)
-    defender_id = battle.player_two_side.active_card_id
+    attacker_id = battle.first_turn_player_id
+    defender_player_id = battle.opponent_side_for(attacker_id).player_id
+    defender_id = battle.opponent_side_for(attacker_id).active_card_id
 
     for _ in range(5):
-        battle = await services.record_battle_action(battle.player_one_id, "bonus")
+        battle = await services.record_battle_action(attacker_id, "bonus")
     for _ in range(5):
-        battle = await services.record_battle_action(battle.player_one_id, "attack")
-    while battle.current_round == 5 and battle.status == BattleStatus.ACTIVE:
-        if (
-            services.battle_round_summary(
-                battle, battle.player_two_id
-            ).available_action_points
-            <= 0
-        ):
-            break
-        battle = await services.record_battle_action(battle.player_two_id, "block")
+        battle = await services.record_battle_action(defender_player_id, "block")
 
-    defender = battle.player_two_side.cards[defender_id]
-    assert defender.current_health < defender.max_health
+    round_after_bonus = services.battle_round_summary(battle, attacker_id)
+    assert round_after_bonus.total_action_points == 10
+    assert round_after_bonus.available_action_points == 10
+    assert battle.current_round == 6
+
+    for _ in range(5):
+        battle = await services.record_battle_action(attacker_id, "attack")
+    for _ in range(5):
+        battle = await services.record_battle_action(attacker_id, "bonus")
+    for _ in range(5):
+        battle = await services.record_battle_action(defender_player_id, "block")
+
+    defender = battle.opponent_side_for(attacker_id).cards[defender_id]
+    assert defender.current_health <= 0
+
+
+@pytest.mark.asyncio
+async def test_battle_ap_carryover_allows_follow_up_actions_after_ability_cost_one() -> None:
+    """A 1 AP ability should not block later attacks or blocks in the same turn."""
+
+    services = TelegramServices()
+    attacker_template = CardTemplate(
+        id=1,
+        name="Attacker",
+        universe=Universe.ORIGINAL,
+        rarity=Rarity.EPIC,
+        image=ImageRef("attacker.png"),
+        card_class=CardClass.MELEE,
+        base_stats=StatBlock(100, 100, 0),
+        ascended_stats=StatBlock(100, 100, 0),
+        ability=Ability(cost=1, cooldown=0),
+    )
+    defender_template = CardTemplate(
+        id=2,
+        name="Defender",
+        universe=Universe.ORIGINAL,
+        rarity=Rarity.EPIC,
+        image=ImageRef("defender.png"),
+        card_class=CardClass.TANK,
+        base_stats=StatBlock(10, 300, 48),
+        ascended_stats=StatBlock(10, 300, 48),
+        ability=Ability(cost=0, cooldown=0),
+    )
+    await services.card_templates.add(attacker_template)
+    await services.card_templates.add(defender_template)
+
+    player = await services.get_or_create_player(1)
+    player.battle_deck = DeckSlots((11, 12, 13, 14, 15))
+    for card_id in player.battle_deck.card_ids:
+        await services.player_cards.add(
+            PlayerCard(
+                id=card_id,
+                owner_player_id=1,
+                template_id=1,
+                level=1,
+                copies_owned=1,
+                current_form=CardForm.BASE,
+            )
+        )
+    opponent = await services.get_or_create_player(2)
+    opponent.battle_deck = DeckSlots((21, 22, 23, 24, 25))
+    for card_id in opponent.battle_deck.card_ids:
+        await services.player_cards.add(
+            PlayerCard(
+                id=card_id,
+                owner_player_id=2,
+                template_id=2,
+                level=1,
+                copies_owned=1,
+                current_form=CardForm.BASE,
+            )
+        )
+
+    battle = await services.start_battle(1, 2)
+    battle.first_turn_player_id = 1
+    services._set_current_turn_player_id(battle, 1)
+    battle.current_round = 5
+    await services.battles.save(battle)
+
+    attacker_id = 1
+    defender_id = 2
+    for _ in range(5):
+        battle = await services.record_battle_action(attacker_id, "bonus")
+    for _ in range(5):
+        battle = await services.record_battle_action(defender_id, "block")
+
+    summary = services.battle_round_summary(battle, attacker_id)
+    assert summary.total_action_points == 10
+    assert summary.available_action_points == 10
+
+    for _ in range(5):
+        battle = await services.record_battle_action(attacker_id, "bonus")
+    battle = await services.record_battle_action(attacker_id, "ability")
+    battle = await services.record_battle_action(attacker_id, "block")
+    battle = await services.record_battle_action(attacker_id, "block")
+    battle = await services.record_battle_action(attacker_id, "attack")
+    battle = await services.record_battle_action(attacker_id, "attack")
+
+    summary = services.battle_round_summary(battle, attacker_id)
+    assert not summary.is_player_turn
+    assert summary.available_action_points == 0
+    assert summary.attack_count == 2
+    assert summary.block_count == 2
+    assert summary.bonus_count == 5
+    assert summary.ability_used is True
+
+
+@pytest.mark.asyncio
+async def test_battle_summary_recovers_from_stale_turn_pointer() -> None:
+    """A stale cached turn should not hide a player's remaining AP."""
+
+    services = TelegramServices()
+    template = CardTemplate(
+        id=1,
+        name="Hero",
+        universe=Universe.ORIGINAL,
+        rarity=Rarity.EPIC,
+        image=ImageRef("hero.png"),
+        card_class=CardClass.MELEE,
+        base_stats=StatBlock(10, 10, 0),
+        ascended_stats=StatBlock(10, 10, 0),
+        ability=Ability(cost=0, cooldown=0),
+    )
+    await services.card_templates.add(template)
+
+    for player_id in (1, 2):
+        player = await services.get_or_create_player(player_id)
+        player.battle_deck = DeckSlots(
+            (
+                player_id * 10 + 1,
+                player_id * 10 + 2,
+                player_id * 10 + 3,
+                player_id * 10 + 4,
+                player_id * 10 + 5,
+            )
+        )
+        for card_id in player.battle_deck.card_ids:
+            await services.player_cards.add(
+                PlayerCard(
+                    id=card_id,
+                    owner_player_id=player_id,
+                    template_id=1,
+                    level=1,
+                    copies_owned=1,
+                    current_form=CardForm.BASE,
+                )
+            )
+
+    battle = await services.start_battle(1, 2)
+    battle.first_turn_player_id = 1
+    battle.current_round = 5
+    battle.current_turn_player_id = 2
+    services._set_current_turn_player_id(battle, 2)
+    await services.battles.save(battle)
+
+    summary = services.battle_round_summary(battle, 1)
+
+    assert summary.is_player_turn
+    assert summary.current_turn_player_id == 1
+    assert summary.available_action_points == 5
+
+
+@pytest.mark.asyncio
+async def test_battle_result_updates_player_stats_and_finishes_battle() -> None:
+    """A finished battle should update player outcomes in storage."""
+
+    services = TelegramServices()
+    attacker_template = CardTemplate(
+        id=1,
+        name="Attacker",
+        universe=Universe.ORIGINAL,
+        rarity=Rarity.EPIC,
+        image=ImageRef("attacker.png"),
+        card_class=CardClass.MELEE,
+        base_stats=StatBlock(100, 100, 0),
+        ascended_stats=StatBlock(100, 100, 0),
+        ability=Ability(cost=0, cooldown=0),
+    )
+    defender_template = CardTemplate(
+        id=2,
+        name="Defender",
+        universe=Universe.ORIGINAL,
+        rarity=Rarity.EPIC,
+        image=ImageRef("defender.png"),
+        card_class=CardClass.TANK,
+        base_stats=StatBlock(1, 1, 0),
+        ascended_stats=StatBlock(1, 1, 0),
+        ability=Ability(cost=0, cooldown=0),
+    )
+    await services.card_templates.add(attacker_template)
+    await services.card_templates.add(defender_template)
+
+    for player_id, template_id in ((1, 1), (2, 2)):
+        player = await services.get_or_create_player(player_id)
+        player.battle_deck = DeckSlots(
+            (
+                player_id * 10 + 1,
+                player_id * 10 + 2,
+                player_id * 10 + 3,
+                player_id * 10 + 4,
+                player_id * 10 + 5,
+            )
+        )
+        for card_id in player.battle_deck.card_ids:
+            await services.player_cards.add(
+                PlayerCard(
+                    id=card_id,
+                    owner_player_id=player_id,
+                    template_id=template_id,
+                    level=1,
+                    copies_owned=1,
+                    current_form=CardForm.BASE,
+                )
+            )
+
+    battle = await services.start_battle(1, 2)
+    battle.first_turn_player_id = 1
+    services._set_current_turn_player_id(battle, 1)
+    battle.current_round = 5
+    await services.battles.save(battle)
+    attacker_id = battle.first_turn_player_id
+    defender_id = battle.opponent_side_for(attacker_id).player_id
+    defender_side = battle.opponent_side_for(attacker_id)
+    for card in defender_side.cards.values():
+        if card.player_card_id != defender_side.active_card_id:
+            card.current_health = 0
+            card.alive = False
+
+    for _ in range(5):
+        battle = await services.record_battle_action(attacker_id, "bonus")
+    for _ in range(5):
+        battle = await services.record_battle_action(defender_id, "block")
+
+    assert battle.current_round == 6
+    for _ in range(5):
+        battle = await services.record_battle_action(attacker_id, "attack")
+    for _ in range(5):
+        battle = await services.record_battle_action(attacker_id, "bonus")
+    for _ in range(5):
+        battle = await services.record_battle_action(defender_id, "block")
+
+    assert battle.status == BattleStatus.FINISHED
+    assert battle.winner_id == attacker_id
+    updated_attacker = await services.get_player(attacker_id)
+    updated_defender = await services.get_player(defender_id)
+    assert updated_attacker is not None and updated_defender is not None
+    assert updated_attacker.wins == 1
+    assert updated_attacker.losses == 0
+    assert updated_attacker.draws == 0
+    assert updated_defender.losses == 1
+
+
+@pytest.mark.asyncio
+async def test_battle_draw_updates_both_players_draw_counter() -> None:
+    """A drawn battle should increment draws for both players."""
+
+    services = TelegramServices()
+    attacker_template = CardTemplate(
+        id=1,
+        name="Attacker",
+        universe=Universe.ORIGINAL,
+        rarity=Rarity.EPIC,
+        image=ImageRef("attacker.png"),
+        card_class=CardClass.MELEE,
+        base_stats=StatBlock(100, 100, 0),
+        ascended_stats=StatBlock(100, 100, 0),
+        ability=Ability(cost=0, cooldown=0),
+    )
+    defender_template = CardTemplate(
+        id=2,
+        name="Defender",
+        universe=Universe.ORIGINAL,
+        rarity=Rarity.RARE,
+        image=ImageRef("defender.png"),
+        card_class=CardClass.TANK,
+        base_stats=StatBlock(0, 1, 0),
+        ascended_stats=StatBlock(0, 1, 0),
+        ability=Ability(cost=0, cooldown=0),
+    )
+    await services.card_templates.add(attacker_template)
+    await services.card_templates.add(defender_template)
+    for player_id, template_id in ((1, 1), (2, 2)):
+        player = await services.get_or_create_player(player_id)
+        player.battle_deck = DeckSlots(
+            (
+                player_id * 10 + 1,
+                player_id * 10 + 2,
+                player_id * 10 + 3,
+                player_id * 10 + 4,
+                player_id * 10 + 5,
+            )
+        )
+        for card_id in player.battle_deck.card_ids:
+            await services.player_cards.add(
+                PlayerCard(
+                    id=card_id,
+                    owner_player_id=player_id,
+                    template_id=template_id,
+                    current_form=CardForm.BASE,
+                )
+            )
+    battle = await services.start_battle(1, 2)
+    battle.status = BattleStatus.FINISHED
+    battle.winner_id = None
+
+    await services._apply_battle_result(battle)
+
+    player_one = await services.get_player(1)
+    player_two = await services.get_player(2)
+    assert player_one is not None and player_two is not None
+    assert player_one.draws == 1
+    assert player_two.draws == 1
 
 
 @pytest.mark.asyncio

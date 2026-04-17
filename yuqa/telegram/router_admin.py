@@ -566,7 +566,9 @@ def _register_admin_state_handlers(router: Router, services) -> None:
                 + banner_pool_text(
                     banner, _templates(services), _profile_backgrounds(services)
                 ),
-                reply_markup=admin_banner_markup(banner.id, banner.can_edit()),
+                reply_markup=admin_banner_markup(
+                    banner.id, banner.can_edit(), banner.is_available()
+                ),
             )
         await state.set_state(BannerRewardCreate.weight)
         if data.get("reward_kind") == "background":

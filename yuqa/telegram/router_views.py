@@ -588,7 +588,9 @@ async def show_admin(
 
         case "banners":
             if banners:
-                banner = banners[0]
+                banner = next(
+                    (item for item in banners if item.is_available()), banners[0]
+                )
                 text = (
                     admin_text(counts, "banners")
                     + "\n\n"
@@ -596,7 +598,9 @@ async def show_admin(
                     + "\n\n"
                     + banner_pool_text(banner, templates, backgrounds)
                 )
-                markup = admin_banner_markup(banner.id, banner.can_edit())
+                markup = admin_banner_markup(
+                    banner.id, banner.can_edit(), banner.is_available()
+                )
             else:
                 text, markup = (
                     admin_text(counts, "banners")

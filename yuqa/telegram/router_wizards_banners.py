@@ -70,7 +70,7 @@ async def banner_end_at(message: Message, services, state: FSMContext):
     await state.clear()
     await message.answer(
         text=banner_text(banner, True),
-        reply_markup=admin_banner_markup(banner.id, True),
+        reply_markup=admin_banner_markup(banner.id, True, banner.is_available()),
     )
 
 
@@ -119,7 +119,9 @@ async def _banner_reward_finish(
         + banner_pool_text(
             banner, _templates(services), _profile_backgrounds(services)
         ),
-        reply_markup=admin_banner_markup(banner.id, banner.can_edit()),
+        reply_markup=admin_banner_markup(
+            banner.id, banner.can_edit(), banner.is_available()
+        ),
     )
 
 

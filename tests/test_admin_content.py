@@ -384,8 +384,8 @@ async def test_banner_pool_can_change_before_start_and_is_locked_after_start() -
 
 
 @pytest.mark.asyncio
-async def test_admin_can_delete_banner_before_start_only() -> None:
-    """Banner deletion should work only before the banner start moment."""
+async def test_admin_can_delete_banner_before_start_or_while_active() -> None:
+    """Banner deletion should work before start and while the banner is active."""
 
     services = TelegramServices()
     editable = await services.create_banner(
@@ -405,8 +405,23 @@ async def test_admin_can_delete_banner_before_start_only() -> None:
         datetime.now(timezone.utc) - timedelta(hours=1),
         datetime.now(timezone.utc) + timedelta(days=1),
     )
+    await services.delete_banner(started.id)
+    assert started.id not in services.banners.items
+
+    expired = Banner(
+        id=100,
+        name="Уже завершился",
+        banner_type=BannerType.EVENT,
+        cost_resource=ResourceType.GOLD_TICKETS,
+        date_range=DateRange(
+            datetime.now(timezone.utc) - timedelta(days=3),
+            datetime.now(timezone.utc) - timedelta(days=1),
+        ),
+    )
+    await services.banners.add(expired)
+
     with pytest.raises(ForbiddenActionError):
-        await services.delete_banner(started.id)
+        await services.delete_banner(expired.id)
 
 
 @pytest.mark.asyncio

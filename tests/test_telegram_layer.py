@@ -804,12 +804,14 @@ async def test_stale_battle_button_recovers_to_battle_screen_instead_of_notice()
     assert callback.answered_text is None
 
 
-def test_admin_banner_markup_has_delete_button_only_when_editable() -> None:
-    """Delete-banner button should only appear for editable banners."""
+def test_admin_banner_markup_has_delete_button_for_editable_or_active_banner() -> None:
+    """Delete-banner button should appear for editable and active banners."""
 
     editable = _button_texts(admin_banner_markup(1, True))
+    active = _button_texts(admin_banner_markup(1, False, True))
     locked = _button_texts(admin_banner_markup(1, False))
     assert "🗑 Удалить баннер" in editable
+    assert "🗑 Удалить баннер" in active
     assert "🗑 Удалить баннер" not in locked
 
 

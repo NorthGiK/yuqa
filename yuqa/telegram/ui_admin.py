@@ -185,7 +185,9 @@ def admin_wizard_markup(back_section: str = "dashboard") -> InlineKeyboardMarkup
     )
 
 
-def admin_banner_markup(banner_id: int, editable: bool) -> InlineKeyboardMarkup:
+def admin_banner_markup(
+    banner_id: int, editable: bool, allow_delete: bool = False
+) -> InlineKeyboardMarkup:
     """Return a banner management keyboard."""
 
     buttons = []
@@ -210,14 +212,22 @@ def admin_banner_markup(banner_id: int, editable: bool) -> InlineKeyboardMarkup:
                         action="banner_remove_background", banner_id=banner_id
                     ),
                 ),
-                (
-                    "🗑 Удалить баннер",
-                    AdminCallback(action="delete_banner", banner_id=banner_id),
-                ),
             ]
         )
+    if editable or allow_delete:
+        buttons.append(
+            (
+                "🗑 Удалить баннер",
+                AdminCallback(action="delete_banner", banner_id=banner_id),
+            )
+        )
     buttons.append(("⬅️ К баннерам", AdminCallback(action="section", value="banners")))
-    sizes = (2, 2, 1, 1) if editable else (1,)
+    if editable:
+        sizes = (2, 2, 1, 1)
+    elif allow_delete:
+        sizes = (1, 1)
+    else:
+        sizes = (1,)
     return _markup(buttons, sizes)
 
 

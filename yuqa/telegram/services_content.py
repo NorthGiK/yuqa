@@ -242,12 +242,12 @@ class ContentAdminServiceMixin:
         return banner
 
     async def delete_banner(self, banner_id: int) -> None:
-        """Delete a banner if it has not started yet."""
+        """Delete a banner while it is still manageable or currently active."""
 
         banner = await self.banners.get_by_id(banner_id)
         if banner is None:
             raise EntityNotFoundError("banner not found")
-        if not banner.can_edit():
+        if not banner.can_edit() and not banner.is_available():
             raise ForbiddenActionError("banner already started")
         await self.banners.delete(banner_id)
 

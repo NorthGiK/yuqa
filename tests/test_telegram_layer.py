@@ -11,6 +11,7 @@ from yuqa.shared.enums import (
     AbilityStat,
     AbilityTarget,
     CardClass,
+    IdeaStatus,
     ProfileBackgroundRarity,
     Rarity,
     Universe,
@@ -60,11 +61,16 @@ from yuqa.telegram.texts import (
 )
 from yuqa.telegram.ui import (
     admin_banner_markup,
+    admin_choice_markup,
     admin_markup,
     battle_markup,
     COLLECTION_MENU_BUTTON,
     cards_markup,
     collection_markup,
+    card_level_up_confirm_markup,
+    card_markup,
+    admin_idea_detail_markup,
+    admin_ideas_markup,
     main_menu_markup,
     profile_markup,
     shop_markup,
@@ -813,6 +819,31 @@ def test_admin_banner_markup_has_delete_button_for_editable_or_active_banner() -
     assert "🗑 Удалить баннер" in editable
     assert "🗑 Удалить баннер" in active
     assert "🗑 Удалить баннер" not in locked
+
+
+def test_back_buttons_are_removed_from_static_admin_and_detail_keyboards() -> None:
+    """Back buttons should stay out of the static admin and detail keyboards."""
+
+    assert "⬅️ Назад" not in _button_texts(admin_markup("dashboard"))
+    assert "⬅️ Назад" not in _button_texts(admin_markup("cards"))
+    assert "⬅️ Назад" not in _button_texts(admin_choice_markup("card_rarity", [("A", "a")]))
+    assert "⬅️ Назад" not in _button_texts(admin_banner_markup(1, False))
+    assert "⬅️ Назад" not in _button_texts(card_level_up_confirm_markup(1))
+    assert "⬅️ В коллекцию" not in _button_texts(card_markup(1, False, False, False))
+    assert "⬅️ В галерею" not in _button_texts(
+        card_markup(1, False, False, False, scope="gallery")
+    )
+    assert "⬅️ В меню" not in _button_texts(
+        admin_ideas_markup([], 1, scope="admin_pending", has_prev=False, has_next=False)
+    )
+    assert "⬅️ К списку" not in _button_texts(
+        admin_idea_detail_markup(
+            1,
+            1,
+            scope="admin_pending",
+            status=IdeaStatus.PENDING,
+        )
+    )
 
 
 @pytest.mark.asyncio

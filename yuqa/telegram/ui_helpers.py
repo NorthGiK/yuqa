@@ -44,7 +44,6 @@ def _choice_markup(
     buttons = [
         (text, AdminCallback(action=action, value=value)) for text, value in items
     ]
-    buttons.append(("⬅️ Назад", AdminCallback(action="section", value=back_value)))
     return _markup(buttons, (2, 2, 2))
 
 

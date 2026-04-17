@@ -156,7 +156,7 @@ async def card_name(message: Message, state: FSMContext, services=None):
                 "cards",
             ),
         )
-    await message.answer("Введите вселенную текстом или нажмите ⬅️ Назад")
+    await message.answer("Введите вселенную текстом или используйте /cancel")
 
 
 async def card_universe_value(message: Message, state: FSMContext):

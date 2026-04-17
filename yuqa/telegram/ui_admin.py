@@ -1,6 +1,6 @@
 """Admin control keyboards."""
 
-from yuqa.telegram.callbacks import AdminCallback, MenuCallback
+from yuqa.telegram.callbacks import AdminCallback
 from yuqa.telegram.compat import InlineKeyboardMarkup
 from yuqa.telegram.ui_helpers import _choice_markup, _markup
 
@@ -22,7 +22,6 @@ def admin_markup(section: str = "dashboard") -> InlineKeyboardMarkup:
                 ("👥 Игроки", AdminCallback(action="section", value="players")),
                 ("🌌 Вселенные", AdminCallback(action="section", value="universes")),
                 ("🏠 Панель", AdminCallback(action="section", value="dashboard")),
-                ("⬅️ Назад", MenuCallback(section="home")),
             ],
             (2, 2, 2, 2),
         )
@@ -31,9 +30,8 @@ def admin_markup(section: str = "dashboard") -> InlineKeyboardMarkup:
             [
                 ("➕ Создать фон", AdminCallback(action="create_profile_background")),
                 ("🏠 Панель", AdminCallback(action="section", value="dashboard")),
-                ("⬅️ Назад", MenuCallback(section="home")),
             ],
-            (2, 1),
+            (2,),
         )
     if section == "players":
         return _markup(
@@ -43,18 +41,16 @@ def admin_markup(section: str = "dashboard") -> InlineKeyboardMarkup:
                 ("💎 Премиум", AdminCallback(action="players_premium_toggle")),
                 ("🗑 Удалить игрока", AdminCallback(action="delete_player")),
                 ("🏠 Панель", AdminCallback(action="section", value="dashboard")),
-                ("⬅️ Назад", MenuCallback(section="home")),
             ],
-            (2, 2, 2),
+            (2, 2, 1),
         )
     if section == "banners":
         return _markup(
             [
                 ("➕ Создать баннер", AdminCallback(action="create_banner")),
                 ("🏠 Панель", AdminCallback(action="section", value="dashboard")),
-                ("⬅️ Назад", MenuCallback(section="home")),
             ],
-            (2, 1),
+            (2,),
         )
     if section == "shop":
         return _markup(
@@ -62,9 +58,8 @@ def admin_markup(section: str = "dashboard") -> InlineKeyboardMarkup:
                 ("➕ Создать товар", AdminCallback(action="create_shop_item")),
                 ("🗑 Удалить товар", AdminCallback(action="delete_shop_item")),
                 ("🏠 Панель", AdminCallback(action="section", value="dashboard")),
-                ("⬅️ Назад", MenuCallback(section="home")),
             ],
-            (2, 2),
+            (2, 1),
         )
     if section == "standard_cards":
         return _markup(
@@ -73,9 +68,8 @@ def admin_markup(section: str = "dashboard") -> InlineKeyboardMarkup:
                 ("➖ Удалить ID", AdminCallback(action="standard_remove")),
                 ("🗑 Очистить", AdminCallback(action="standard_clear")),
                 ("🏠 Панель", AdminCallback(action="section", value="dashboard")),
-                ("⬅️ Назад", MenuCallback(section="home")),
             ],
-            (2, 2, 1),
+            (2, 2),
         )
     if section == "universes":
         return _markup(
@@ -83,9 +77,8 @@ def admin_markup(section: str = "dashboard") -> InlineKeyboardMarkup:
                 ("➕ Новая вселенная", AdminCallback(action="universe_add")),
                 ("🗑 Удалить вселенную", AdminCallback(action="universe_remove")),
                 ("🏠 Панель", AdminCallback(action="section", value="dashboard")),
-                ("⬅️ Назад", MenuCallback(section="home")),
             ],
-            (2, 2),
+            (2, 1),
         )
     if section == "battle_pass":
         return _markup(
@@ -107,9 +100,8 @@ def admin_markup(section: str = "dashboard") -> InlineKeyboardMarkup:
                     AdminCallback(action="section", value="free_rewards"),
                 ),
                 ("🏠 Панель", AdminCallback(action="section", value="dashboard")),
-                ("⬅️ Назад", MenuCallback(section="home")),
             ],
-            (1, 1, 1, 2),
+            (1, 1, 1, 1, 1),
         )
     if section == "premium_battle_pass":
         return _markup(
@@ -127,9 +119,8 @@ def admin_markup(section: str = "dashboard") -> InlineKeyboardMarkup:
                     AdminCallback(action="premium_battle_pass_delete_season"),
                 ),
                 ("🏠 Панель", AdminCallback(action="section", value="dashboard")),
-                ("⬅️ Назад", MenuCallback(section="home")),
             ],
-            (1, 1, 1, 2),
+            (1, 1, 1, 1),
         )
     if section == "free_rewards":
         return _markup(
@@ -144,9 +135,8 @@ def admin_markup(section: str = "dashboard") -> InlineKeyboardMarkup:
                     AdminCallback(action="free_rewards_resource_values"),
                 ),
                 ("🏠 Панель", AdminCallback(action="section", value="dashboard")),
-                ("⬅️ Назад", MenuCallback(section="home")),
             ],
-            (2, 1, 2),
+            (2, 1, 1),
         )
     return _markup(
         [
@@ -167,9 +157,8 @@ def admin_markup(section: str = "dashboard") -> InlineKeyboardMarkup:
             ),
             ("🎁 Фри-награды", AdminCallback(action="section", value="free_rewards")),
             ("🌌 Вселенные", AdminCallback(action="section", value="universes")),
-            ("⬅️ Назад", MenuCallback(section="home")),
         ],
-        (2, 2, 2, 2, 2, 2),
+        (2, 2, 2, 2, 2, 1),
     )
 
 
@@ -221,11 +210,10 @@ def admin_banner_markup(
                 AdminCallback(action="delete_banner", banner_id=banner_id),
             )
         )
-    buttons.append(("⬅️ К баннерам", AdminCallback(action="section", value="banners")))
     if editable:
-        sizes = (2, 2, 1, 1)
+        sizes = (2, 2, 1)
     elif allow_delete:
-        sizes = (1, 1)
+        sizes = (1,)
     else:
         sizes = (1,)
     return _markup(buttons, sizes)

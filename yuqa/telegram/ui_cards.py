@@ -94,13 +94,7 @@ def card_markup(
         buttons.append(
             ("🔁 Сменить форму", CardCallback(action="toggle_form", card_id=card_id))
         )
-    buttons.append(
-        (
-            "⬅️ В коллекцию" if scope == "collection" else "⬅️ В галерею",
-            CardCallback(action="page", card_id=card_id, page=page, scope=scope),
-        )
-    )
-    return _markup(buttons, (2, 1))
+    return _markup(buttons, (2, 1) if len(buttons) > 2 else (1,))
 
 
 def card_level_up_confirm_markup(
@@ -114,12 +108,8 @@ def card_level_up_confirm_markup(
                 "✅ Подтвердить",
                 CardCallback(action="confirm_level_up", card_id=card_id),
             ),
-            (
-                "⬅️ Назад",
-                CardCallback(action="open", card_id=card_id, page=page, scope=scope),
-            ),
         ],
-        (1, 1),
+        (1,),
     )
 
 

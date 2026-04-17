@@ -2,7 +2,7 @@
 
 from yuqa.ideas.domain.entities import Idea
 from yuqa.shared.enums import IdeaStatus
-from yuqa.telegram.callbacks import AdminCallback, IdeaCallback, MenuCallback
+from yuqa.telegram.callbacks import AdminCallback, IdeaCallback
 from yuqa.telegram.compat import InlineKeyboardMarkup
 from yuqa.telegram.ui_helpers import _markup
 
@@ -117,12 +117,11 @@ def admin_ideas_markup(
         nav.append(("➡️", IdeaCallback(action="admin_list", page=page + 1, scope=scope)))
     buttons.extend(nav)
     buttons.append(("🏠 Панель", AdminCallback(action="section", value="dashboard")))
-    buttons.append(("⬅️ В меню", MenuCallback(section="home")))
     sizes = [1] * len(ideas)
     sizes.extend((2, 2))
     if nav:
         sizes.append(len(nav))
-    sizes.extend((1, 1))
+    sizes.append(1)
     return _markup(buttons, tuple(sizes))
 
 
@@ -182,10 +181,7 @@ def admin_idea_detail_markup(
                 ),
             ]
         )
-    buttons.append(
-        ("⬅️ К списку", IdeaCallback(action="admin_list", page=page, scope=scope))
-    )
-    return _markup(buttons, (2, 1) if len(buttons) > 1 else (1,))
+    return _markup(buttons, (2,) if len(buttons) > 1 else ())
 
 
 __all__ = [

@@ -10,6 +10,7 @@ yuqa.egg-info/
 .venv/
 .cache/
 main.build/
+
 # script that the execute binary file
 main.sh
 # binary file of app for Linux 🫶
@@ -19,5 +20,7 @@ main.exe
 
 # Secrets and data
 data/
+*.sqlite
+*.db
 .env
 deploy_on_server.fish

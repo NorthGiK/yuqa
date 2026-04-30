@@ -11,16 +11,15 @@ from yuqa.infrastructure.sqlalchemy.serialization import (
     CATALOG_SECTIONS,
     SECTION_CODECS,
 )
+from yuqa.infrastructure.sqlalchemy.urls import ensure_sqlite_parent, sync_database_url
 from yuqa.shared.enums import Universe
 
 
 def create_sync_engine(database_url: str):
     """Create the synchronous engine used by the document store."""
 
-    if database_url.startswith("sqlite:///"):
-        db_path = Path(database_url.removeprefix("sqlite:///"))
-        if db_path.name:
-            db_path.parent.mkdir(parents=True, exist_ok=True)
+    database_url = sync_database_url(database_url)
+    ensure_sqlite_parent(database_url)
 
     engine = create_engine(database_url, future=True, pool_pre_ping=True)
 

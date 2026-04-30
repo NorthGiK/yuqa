@@ -27,8 +27,9 @@ from yuqa.telegram.compat import (
     TelegramBadRequest,
     User,
 )
-from yuqa.telegram.callbacks import BattleCallback
-from yuqa.telegram.reply import safe_edit, send_card_preview
+from yuqa.telegram.callbacks import BattleCallback, CardCallback
+from yuqa.telegram.media_storage import local_media_from_message
+from yuqa.telegram.reply import safe_edit, send_card_preview, send_media_preview
 from yuqa.telegram.router import (
     build_router,
     show_admin,
@@ -92,6 +93,16 @@ def _button_texts(markup) -> set[str]:
             else:
                 texts.add(button[0])
     return texts
+
+
+class _FakeDownloadBot:
+    """Minimal bot double that writes downloaded Telegram media."""
+
+    def __init__(self, payload: bytes = b"downloaded media") -> None:
+        self.payload = payload
+
+    async def download(self, file_id: str, destination) -> None:
+        destination.write_bytes(self.payload)
 
 
 class _CallbackWithBot:
@@ -426,6 +437,54 @@ async def test_show_card_detail_opens_from_collection_and_gallery() -> None:
 
 
 @pytest.mark.asyncio
+async def test_card_actions_keep_image_preview_after_level_up() -> None:
+    """Card action callbacks should redraw details with the card image."""
+
+    services = TelegramServices()
+    template = CardTemplate(
+        id=1,
+        name="Рейна",
+        universe=Universe.ORIGINAL,
+        rarity=Rarity.EPIC,
+        image=ImageRef("reina-file-id"),
+        card_class=CardClass.MELEE,
+        base_stats=StatBlock(10, 20, 5),
+        ascended_stats=StatBlock(15, 25, 8),
+        ability=Ability(cost=0, cooldown=0),
+    )
+    player = await services.get_or_create_player(1)
+    player.wallet = ResourceWallet(coins=500, orbs=0)
+    await services.card_templates.add(template)
+    await services.player_cards.add(
+        PlayerCard(
+            id=7,
+            owner_player_id=1,
+            template_id=1,
+            copies_owned=2,
+        )
+    )
+    router = build_router(services, SimpleNamespace(admin_ids=set()))
+    if hasattr(router, "observers"):
+        card_actions = next(
+            handler.callback
+            for handler in router.observers["callback_query"].handlers
+            if handler.callback.__name__ == "card_actions"
+        )
+    else:
+        card_actions = next(
+            callback
+            for event_type, _filters, callback in router.handlers
+            if event_type == "callback_query" and callback.__name__ == "card_actions"
+        )
+    callback = CallbackQuery(from_user=User(1), message=Message(text="old"))
+
+    await card_actions(callback, CardCallback(action="confirm_level_up", card_id=7))
+
+    assert callback.message.answered_photo == "reina-file-id"
+    assert "Уровень" in (callback.message.caption or "")
+
+
+@pytest.mark.asyncio
 async def test_card_preview_falls_back_to_text_when_photo_send_fails() -> None:
     """Card detail screens should fall back to a document before text."""
 
@@ -454,20 +513,72 @@ async def test_card_preview_falls_back_to_text_when_photo_send_fails() -> None:
 
 
 @pytest.mark.asyncio
-async def test_card_image_accepts_photo_and_effects_are_human_friendly() -> None:
+async def test_card_preview_sends_existing_local_image_path(tmp_path) -> None:
+    """Card previews should upload local filesystem image paths."""
+
+    image_path = tmp_path / "reina.png"
+    image_path.write_bytes(b"not really a png")
+    message = Message(from_user=User(1))
+
+    await send_card_preview(message, str(image_path), "🎴 <b>Рейна</b>")
+
+    assert getattr(message.answered_photo, "path", None) == image_path
+    assert message.caption == "🎴 <b>Рейна</b>"
+
+
+@pytest.mark.asyncio
+async def test_media_preview_sends_existing_local_image_path(tmp_path) -> None:
+    """Generic media previews should use the same local-file handling."""
+
+    image_path = tmp_path / "background.png"
+    image_path.write_bytes(b"not really a png")
+    message = Message(from_user=User(1))
+
+    await send_media_preview(message, str(image_path), "🖼️ <b>Фон</b>")
+
+    assert getattr(message.answered_photo, "path", None) == image_path
+    assert message.caption == "🖼️ <b>Фон</b>"
+
+
+@pytest.mark.asyncio
+async def test_card_preview_resolves_images_relative_to_data_dir(
+    monkeypatch, tmp_path
+) -> None:
+    """Relative image keys should resolve inside YUQA_DATA_DIR."""
+
+    data_dir = tmp_path / "data"
+    image_path = data_dir / "cards" / "reina.png"
+    image_path.parent.mkdir(parents=True)
+    image_path.write_bytes(b"not really a png")
+    monkeypatch.setenv("YUQA_DATA_DIR", str(data_dir))
+    message = Message(from_user=User(1))
+
+    await send_card_preview(message, "cards/reina.png", "🎴 <b>Рейна</b>")
+
+    assert getattr(message.answered_photo, "path", None) == image_path
+
+
+@pytest.mark.asyncio
+async def test_card_image_accepts_photo_and_effects_are_human_friendly(
+    monkeypatch, tmp_path
+) -> None:
     """The wizard should accept Telegram photos and readable effect syntax."""
 
     from yuqa.telegram.router import _parse_effects
     from yuqa.telegram.texts.texts import ability_effects_guide
 
+    monkeypatch.setenv("YUQA_DATA_DIR", str(tmp_path))
     photo = [SimpleNamespace(file_id="photo-file-id")]
-    message = Message(from_user=User(1), photo=photo)
+    message = Message(from_user=User(1), photo=photo, bot=_FakeDownloadBot())
     state = FSMContext()
 
     from yuqa.telegram.router import card_image
 
     await card_image(message, state)
-    assert (await state.get_data())["image"] == "photo-file-id"
+    image_key = (await state.get_data())["image"]
+    assert image_key.startswith("media/cards/")
+    assert image_key.endswith(".jpg")
+    assert (tmp_path / image_key).read_bytes() == b"downloaded media"
 
     effects = _parse_effects("OpponentDeck:Defense:100:-999")
     assert effects[0].target.value == "opponents_deck"
@@ -477,6 +588,27 @@ async def test_card_image_accepts_photo_and_effects_are_human_friendly() -> None
 
     guide = ability_effects_guide()
     assert "TargetType" in guide and "StatType" in guide
+
+
+@pytest.mark.asyncio
+async def test_media_storage_copies_local_profile_background(
+    monkeypatch, tmp_path
+) -> None:
+    """Profile background media should also be persisted in local bot storage."""
+
+    monkeypatch.setenv("YUQA_DATA_DIR", str(tmp_path / "data"))
+    source = tmp_path / "upload.png"
+    source.write_bytes(b"profile background")
+
+    media_key, content_type = await local_media_from_message(
+        Message(from_user=User(1), text=str(source)),
+        "profile-backgrounds",
+    )
+
+    assert media_key is not None
+    assert media_key.startswith("media/profile-backgrounds/")
+    assert content_type == "image/png"
+    assert (tmp_path / "data" / media_key).read_bytes() == b"profile background"
 
 
 @pytest.mark.asyncio

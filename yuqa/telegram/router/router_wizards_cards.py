@@ -5,7 +5,8 @@ from yuqa.shared.errors import DomainError, ValidationError
 from yuqa.shared.enums import CardClass, ProfileBackgroundRarity, Rarity
 from yuqa.shared.value_objects.stat_block import StatBlock
 from yuqa.telegram.compat import FSMContext, Message
-from yuqa.telegram.router.router_helpers import _media_from_message, _parse_effects, _parse_int
+from yuqa.telegram.media_storage import local_media_from_message
+from yuqa.telegram.router.router_helpers import _parse_effects, _parse_int
 from yuqa.telegram.router.router_views import show_admin
 from yuqa.telegram.states import (
     AdminPlayerCardEdit,
@@ -177,7 +178,7 @@ async def card_universe_value(message: Message, state: FSMContext):
 async def card_image(message: Message, state: FSMContext):
     """Store the image reference and ask for a class."""
 
-    image_key, _content_type = _media_from_message(message)
+    image_key, _content_type = await local_media_from_message(message, "cards")
     if not image_key:
         return await message.answer("Пришли фото, документ, ссылку или file_id 🖼️")
     await state.update_data(image=image_key)
@@ -293,7 +294,9 @@ async def start_profile_background_create(message: Message, state: FSMContext):
 async def profile_background_media(message: Message, services, state: FSMContext):
     """Create a profile background after the media step."""
 
-    media_key, content_type = _media_from_message(message)
+    media_key, content_type = await local_media_from_message(
+        message, "profile-backgrounds"
+    )
     if not media_key:
         return await message.answer(
             "Пришли фото, видео, документ, ссылку или file_id 🖼️"

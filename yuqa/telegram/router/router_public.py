@@ -75,7 +75,6 @@ from yuqa.telegram.texts.texts import (
     battle_started_text,
     battle_status_text,
     card_level_up_confirm_text,
-    card_text,
     profile_background_text,
 )
 from yuqa.telegram.ui.ui import (
@@ -84,7 +83,6 @@ from yuqa.telegram.ui.ui import (
     banner_markup,
     battle_actions_markup,
     card_level_up_confirm_markup,
-    card_markup,
     profile_background_markup,
 )
 from yuqa.telegram.router.router_wizards_players import (
@@ -572,20 +570,15 @@ def _register_public_callbacks(router: Router, services, settings) -> None:
                 )
             else:
                 return await callback.answer()
-            template = await services.get_template(card.template_id)
         except DomainError as error:
             return await send_notice(callback, f"❌ {error}")
-        await send_or_edit(
+        return await show_card_detail(
             callback,
-            card_text(card, template),
-            card_markup(
-                card.id,
-                card.can_level_up(),
-                card.can_ascend(),
-                card.is_ascended,
-                page=max(callback_data.page, 1),
-                scope=callback_data.scope,
-            ),
+            services,
+            card.id,
+            callback.from_user.id,
+            page=max(callback_data.page, 1),
+            scope="collection",
         )
 
     @router.callback_query(ShopCallback.filter())

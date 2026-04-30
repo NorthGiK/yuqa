@@ -312,6 +312,7 @@ class Message:
         "photo",
         "video",
         "document",
+        "bot",
     )
 
     def __init__(
@@ -322,6 +323,7 @@ class Message:
         photo: object | None = None,
         video: object | None = None,
         document: object | None = None,
+        bot: object | None = None,
         **_: object,
     ) -> None:
         self.from_user = from_user
@@ -330,6 +332,7 @@ class Message:
         self.photo = photo
         self.video = video
         self.document = document
+        self.bot = bot
         self.answered_text = None
         self.answered_photo = None
         self.answered_document = None

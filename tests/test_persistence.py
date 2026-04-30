@@ -7,6 +7,8 @@ import pytest
 from yuqa.cards.domain.entities import Ability
 from yuqa.cards.domain.entities import PlayerCard
 from yuqa.infrastructure.sqlalchemy.migrations import upgrade_head
+from yuqa.infrastructure.sqlalchemy.repositories import create_sync_engine
+from yuqa.infrastructure.sqlalchemy.urls import sync_database_url
 from yuqa.shared.enums import (
     CardClass,
     CardForm,
@@ -24,6 +26,38 @@ def _sqlite_url(path: Path) -> str:
     """Build a SQLite URL for a temporary database file."""
 
     return f"sqlite:///{path.resolve().as_posix()}"
+
+
+def _async_sqlite_url(path: Path) -> str:
+    """Build an async-driver SQLite URL for runtime compatibility tests."""
+
+    return f"sqlite+aiosqlite:///{path.resolve().as_posix()}"
+
+
+def test_sync_database_url_strips_async_sqlite_driver(tmp_path: Path) -> None:
+    """Synchronous startup paths should not use the aiosqlite driver."""
+
+    database_url = _async_sqlite_url(tmp_path / "yuqa.db")
+
+    assert sync_database_url(database_url) == _sqlite_url(tmp_path / "yuqa.db")
+
+
+def test_migrations_accept_async_sqlite_url(tmp_path: Path) -> None:
+    """Auto-migration should work when DATABASE_URL names aiosqlite."""
+
+    database_url = _async_sqlite_url(tmp_path / "yuqa.db")
+
+    upgrade_head(database_url)
+    engine = create_sync_engine(database_url)
+    try:
+        with engine.connect() as connection:
+            rows = connection.exec_driver_sql(
+                "SELECT name FROM sqlite_master WHERE name = 'state_documents'"
+            ).all()
+    finally:
+        engine.dispose()
+
+    assert rows == [("state_documents",)]
 
 
 @pytest.mark.asyncio

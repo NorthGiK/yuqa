@@ -5,6 +5,8 @@ from pathlib import Path
 from alembic import command
 from alembic.config import Config
 
+from yuqa.infrastructure.sqlalchemy.urls import ensure_sqlite_parent, sync_database_url
+
 
 def _project_root() -> Path:
     """Return the repository root."""
@@ -16,13 +18,11 @@ def alembic_config(database_url: str) -> Config:
     """Build an Alembic config pinned to the current repository."""
 
     root = _project_root()
-    if database_url.startswith("sqlite:///"):
-        db_path = Path(database_url.removeprefix("sqlite:///"))
-        if db_path.name:
-            db_path.parent.mkdir(parents=True, exist_ok=True)
+    sync_url = sync_database_url(database_url)
+    ensure_sqlite_parent(sync_url)
     config = Config(str(root / "alembic.ini"))
     config.set_main_option("script_location", str(root / "alembic"))
-    config.set_main_option("sqlalchemy.url", database_url)
+    config.set_main_option("sqlalchemy.url", sync_url)
     return config
 
 

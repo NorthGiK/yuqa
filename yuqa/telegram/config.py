@@ -67,7 +67,7 @@ class Settings:
     auto_migrate: bool
 
     @classmethod
-    def from_env(cls) -> "Settings":
+    def from_env(cls) -> Settings:
         """Build settings from standard environment variables."""
 
         content_dir = Path(getenv("YUQA_DATA_DIR", "data/yuqa")).expanduser()

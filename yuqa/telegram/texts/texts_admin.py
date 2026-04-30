@@ -55,7 +55,8 @@ def profile_background_wizard_text(step: str, draft: dict) -> str:
         f"<i>Шаг:</i> <code>{step}</code>\n\n"
         f"<b>Редкость:</b> {draft.get('rarity', '—')}\n"
         f"<b>Медиа:</b> {draft.get('media', '—')}\n\n"
-        "<i>Поддерживаются фото, видео, документы, ссылки и готовые file_id.</i>"
+        "<i>Поддерживаются фото, видео, документы, ссылки и готовые file_id. "
+        "Медиа сохранится локально.</i>"
     )
 
 

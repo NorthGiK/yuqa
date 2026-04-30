@@ -1,12 +1,21 @@
 """Helpers that keep handler bodies short."""
 
-from yuqa.telegram.compat import (
+from os import getenv
+from pathlib import Path
+from urllib.parse import urlparse
+
+from aiogram.exceptions import TelegramBadRequest
+from aiogram.types import (
     CallbackQuery,
     InlineKeyboardMarkup,
     Message,
-    TelegramBadRequest,
+    FSInputFile,
 )
 
+from yuqa.telegram.config import Settings
+
+
+settings = Settings.from_env()
 
 def _markup_signature(markup: object | None) -> tuple:
     """Return a comparable representation of an inline keyboard."""
@@ -97,6 +106,74 @@ async def send_alert(event: Message | CallbackQuery, text: str) -> Message | Non
     return await event.answer(text)
 
 
+def _telegram_media(media_key: str) -> object:
+    """Return a Telegram media value for a file id, URL, or local file path."""
+
+    parsed = urlparse(media_key)
+    if parsed.scheme in {"http", "https"}:
+        return media_key
+    if parsed.scheme == "file":
+        paths = [Path(parsed.path)]
+    else:
+        path = Path(media_key).expanduser()
+        paths = [path]
+        if not path.is_absolute():
+            data_dir = Path(getenv("YUQA_DATA_DIR", "data/yuqa")).expanduser()
+            paths.append(data_dir / path)
+
+    for path in paths:
+        if path.exists() and path.is_file():
+            return FSInputFile(path)
+    return media_key
+
+
+async def _send_media_with_fallback(
+    event: Message | CallbackQuery,
+    media_key: str,
+    caption: str,
+    reply_markup: InlineKeyboardMarkup | None = None,
+    *,
+    content_type: str = "image/png",
+) -> Message | None:
+    """Send media when possible and degrade to a text detail screen."""
+
+    photo = FSInputFile(settings.content_dir / media_key)
+
+    sender: Message | CallbackQuery
+    if isinstance(event, CallbackQuery) and event.message:
+        sender = event.message
+    else:
+        sender = event
+
+    if isinstance(event, CallbackQuery):
+        await event.answer()
+    media = _telegram_media(media_key)
+    if content_type.startswith("video/") and hasattr(sender, "answer_video"):
+        try:
+            return await sender.answer_video(
+                video=media,
+                caption=caption,
+                reply_markup=reply_markup,
+            )
+        except TelegramBadRequest:
+            return await send_or_edit(event, caption, reply_markup)
+    if hasattr(sender, "answer_photo"):
+        try:
+            return await sender.answer_photo(
+                photo=media, caption=caption, reply_markup=reply_markup
+            )
+        except TelegramBadRequest:
+            if hasattr(sender, "answer_document"):
+                try:
+                    return await sender.answer_document(
+                        document=media, caption=caption, reply_markup=reply_markup
+                    )
+                except TelegramBadRequest:
+                    return await send_or_edit(event, caption, reply_markup)
+            return await send_or_edit(event, caption, reply_markup)
+    return await send_or_edit(event, caption, reply_markup)
+
+
 async def send_card_preview(
     event: Message | CallbackQuery,
     photo: str,
@@ -107,33 +184,13 @@ async def send_card_preview(
 ) -> Message | None:
     """Send a card preview with an image when possible."""
 
-    sender: Message | CallbackQuery = (
-        event.message if isinstance(event, CallbackQuery) and event.message else event
+    return await _send_media_with_fallback(
+        event,
+        photo,
+        caption,
+        reply_markup,
+        content_type=content_type,
     )
-    if hasattr(sender, "answer_photo"):
-        if isinstance(event, CallbackQuery):
-            await event.answer()
-        if content_type.startswith("video/") and hasattr(sender, "answer_video"):
-            try:
-                return await sender.answer_video(
-                    video=photo, caption=caption, reply_markup=reply_markup
-                )
-            except TelegramBadRequest:
-                pass
-        try:
-            return await sender.answer_photo(
-                photo=photo, caption=caption, reply_markup=reply_markup
-            )
-        except TelegramBadRequest:
-            if hasattr(sender, "answer_document"):
-                try:
-                    return await sender.answer_document(
-                        document=photo, caption=caption, reply_markup=reply_markup
-                    )
-                except TelegramBadRequest:
-                    return await send_or_edit(event, caption, reply_markup)
-            return await send_or_edit(event, caption, reply_markup)
-    return await send_or_edit(event, caption, reply_markup)
 
 
 async def send_media_preview(
@@ -146,27 +203,10 @@ async def send_media_preview(
 ) -> Message | None:
     """Send an image or video preview depending on the content type."""
 
-    sender: Message | CallbackQuery = (
-        event.message if isinstance(event, CallbackQuery) and event.message else event
+    return await _send_media_with_fallback(
+        event,
+        media_key,
+        caption,
+        reply_markup,
+        content_type=content_type,
     )
-    if isinstance(event, CallbackQuery):
-        await event.answer()
-    if content_type.startswith("video/") and hasattr(sender, "answer_video"):
-        try:
-            return await sender.answer_video(
-                video=media_key,
-                caption=caption,
-                reply_markup=reply_markup,
-            )
-        except TelegramBadRequest:
-            return await send_or_edit(event, caption, reply_markup)
-    if hasattr(sender, "answer_photo"):
-        try:
-            return await sender.answer_photo(
-                photo=media_key,
-                caption=caption,
-                reply_markup=reply_markup,
-            )
-        except TelegramBadRequest:
-            return await send_or_edit(event, caption, reply_markup)
-    return await send_or_edit(event, caption, reply_markup)

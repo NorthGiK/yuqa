@@ -4,7 +4,7 @@ ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
     PIP_NO_CACHE_DIR=1 \
     YUQA_DATA_DIR=/data \
-    DATABASE_URL=sqlite+aiosqlite:///data/yuqa.db \
+    DATABASE_URL=sqlite:////data/yuqa.db \
     YUQA_AUTO_MIGRATE=true \
     UV_NO_DEV=1
 
@@ -27,4 +27,4 @@ USER appuser
 HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
   CMD python -m yuqa.infrastructure.sqlalchemy.healthcheck || exit 1
 
-CMD ["uv", "run", "yuqa.main"]
+CMD ["uv", "run", "yuqa"]

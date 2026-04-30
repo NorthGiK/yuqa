@@ -6,10 +6,12 @@ Tests are organized by behavior rather than by package mirroring. Use the file w
 ## Domain Tests
 - `test_cards.py`
 - `test_clans.py`
+- `test_ideas.py`
 - `test_shop.py`
 - `test_banners.py`
 - `test_battle_engine.py`
 - `test_quests_battlepass.py`
+- `test_shared.py`
 
 ## Telegram and UX Tests
 - `test_telegram_layer.py`

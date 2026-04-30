@@ -19,17 +19,20 @@ help:
 	@echo "  make clean      - remove caches"
 
 sync:
-	$(UV) sync --extra dev
+	$(UV) sync --extra dev --extra docker
 
 run:
 	$(UV) run yuqa
+	make clean
 
 test:
 	$(UV) run pytest -q
+	make clean
 
 test-file:
 	@test -n "$(FILE)" || (echo "Usage: make test-file FILE=tests/test_shop.py" && exit 1)
 	$(UV) run pytest -q "$(FILE)"
+	make clean
 
 lint:
 	$(UV) run ruff check yuqa tests main.py
@@ -43,6 +46,7 @@ build:
 # run binary file only on linux
 brun:
 	bash main.sh
+	make clean
 
 db-upgrade:
 	$(UV) run alembic upgrade head

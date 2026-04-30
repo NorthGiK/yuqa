@@ -5,7 +5,7 @@ from pathlib import Path
 
 from yuqa.telegram.config import Settings
 from yuqa.telegram.router import build_router
-from yuqa.telegram.services import TelegramServices
+from yuqa.telegram.services.services import TelegramServices
 
 
 def _message_callbacks(router) -> list:

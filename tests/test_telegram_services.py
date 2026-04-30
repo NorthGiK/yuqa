@@ -51,8 +51,8 @@ from yuqa.telegram.router import (
     start_universe_create,
     start_universe_delete,
 )
-from yuqa.telegram.services import TelegramServices
-from yuqa.telegram.texts import battle_started_text
+from yuqa.telegram.services.services import TelegramServices
+from yuqa.telegram.texts.texts import battle_started_text
 
 
 @pytest.fixture()
@@ -1412,7 +1412,7 @@ async def test_battle_pass_progress_is_visible() -> None:
 
     season = await services.active_battle_pass()
     assert season is not None
-    from yuqa.telegram.texts import battle_pass_text
+    from yuqa.telegram.texts.texts import battle_pass_text
 
     text = battle_pass_text(season, player)
 

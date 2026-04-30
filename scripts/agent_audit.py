@@ -45,6 +45,89 @@ FEATURE_NAME_ALIASES = {
 }
 
 
+def _telegram_package_paths(
+    package: str,
+    *modules: str,
+    include_surface: bool = False,
+) -> list[str]:
+    """Return package-relative Telegram module paths."""
+
+    paths = [f"yuqa/telegram/{package}/__init__.py"] if include_surface else []
+    paths.extend(f"yuqa/telegram/{package}/{module}.py" for module in modules)
+    return paths
+
+
+TELEGRAM_ROUTER_SURFACE = "yuqa/telegram/router/__init__.py"
+TELEGRAM_ROUTER_ENTRY = "yuqa/telegram/router/router.py"
+TELEGRAM_ROUTER_PUBLIC = "yuqa/telegram/router/router_public.py"
+TELEGRAM_ROUTER_ADMIN = "yuqa/telegram/router/router_admin.py"
+TELEGRAM_ROUTER_VIEWS = "yuqa/telegram/router/router_views.py"
+TELEGRAM_ROUTER_HELPERS = "yuqa/telegram/router/router_helpers.py"
+TELEGRAM_SERVICES_SURFACE = "yuqa/telegram/services/__init__.py"
+TELEGRAM_SERVICES_ENTRY = "yuqa/telegram/services/services.py"
+TELEGRAM_SERVICES_CONTRACTS = "yuqa/telegram/services/services_contracts.py"
+TELEGRAM_TEXTS_SURFACE = "yuqa/telegram/texts/__init__.py"
+TELEGRAM_TEXTS_ENTRY = "yuqa/telegram/texts/texts.py"
+TELEGRAM_UI_SURFACE = "yuqa/telegram/ui/__init__.py"
+TELEGRAM_UI_ENTRY = "yuqa/telegram/ui/ui.py"
+TELEGRAM_ROUTER_GROUP = _telegram_package_paths(
+    "router",
+    "router",
+    "router_public",
+    "router_admin",
+    include_surface=True,
+)
+TELEGRAM_WIZARD_GROUP = _telegram_package_paths(
+    "router",
+    "router_wizards_players",
+    "router_wizards_progression",
+    "router_wizards_content",
+    "router_wizards_cards",
+    "router_wizards_banners",
+    "router_wizards_shop",
+    "router_battle",
+)
+TELEGRAM_TEXTS_GROUP = _telegram_package_paths(
+    "texts",
+    "texts",
+    "texts_navigation",
+    "texts_battle",
+    "texts_battle_pass",
+    "texts_profile",
+    "texts_cards",
+    "texts_rewards",
+    "texts_ideas",
+    "texts_catalog",
+    "texts_admin",
+    include_surface=True,
+)
+TELEGRAM_UI_GROUP = _telegram_package_paths(
+    "ui",
+    "ui",
+    "ui_navigation",
+    "ui_battle",
+    "ui_cards",
+    "ui_profile",
+    "ui_catalog",
+    "ui_rewards",
+    "ui_ideas",
+    "ui_admin",
+    include_surface=True,
+)
+TELEGRAM_SERVICES_GROUP = _telegram_package_paths(
+    "services",
+    "services",
+    "services_contracts",
+    "services_battles",
+    "services_battle_pass",
+    "services_players",
+    "services_social",
+    "services_content",
+    "services_support",
+    include_surface=True,
+)
+
+
 @dataclass(slots=True)
 class PythonModule:
     """Minimal static metadata for one Python module."""
@@ -92,7 +175,8 @@ def _read_python_module(path: Path) -> PythonModule:
             else:
                 imports.add(node.module)
     functions = sum(
-        isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)) for node in ast.walk(tree)
+        isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
+        for node in ast.walk(tree)
     )
     classes = sum(isinstance(node, ast.ClassDef) for node in ast.walk(tree))
     return PythonModule(
@@ -146,85 +230,100 @@ def _runtime_flow() -> list[dict[str, str]]:
     """Return the normal runtime entry flow for debugging."""
 
     return [
-        {"path": "main.py", "role": "CLI shim that forwards into the package entrypoint."},
+        {
+            "path": "main.py",
+            "role": "CLI shim that forwards into the package entrypoint.",
+        },
         {
             "path": "yuqa/main.py",
             "role": "Loads env settings, runs migrations, builds services, and starts polling.",
         },
         {
-            "path": "yuqa/telegram/services.py",
+            "path": TELEGRAM_SERVICES_SURFACE,
+            "role": "Stable import surface for the Telegram service container.",
+        },
+        {
+            "path": TELEGRAM_SERVICES_ENTRY,
             "role": "Builds repositories, selects storage mode, and hosts shared service helpers.",
         },
         {
-            "path": "yuqa/telegram/services_battles.py",
+            "path": TELEGRAM_SERVICES_CONTRACTS,
+            "role": "Defines type-only service contracts for mixin dependencies and IDE completion.",
+        },
+        {
+            "path": "yuqa/telegram/services/services_battles.py",
             "role": "Owns battle drafting, round resolution, and matchmaking behavior.",
         },
         {
-            "path": "yuqa/telegram/services_battle_pass.py",
+            "path": "yuqa/telegram/services/services_battle_pass.py",
             "role": "Owns battle pass seasons, levels, and progress purchasing.",
         },
         {
-            "path": "yuqa/telegram/services_players.py",
+            "path": "yuqa/telegram/services/services_players.py",
             "role": "Owns player lookup, profile, free rewards, and deck construction.",
         },
         {
-            "path": "yuqa/telegram/services_social.py",
+            "path": "yuqa/telegram/services/services_social.py",
             "role": "Owns clan membership and idea proposal/moderation flows.",
         },
         {
-            "path": "yuqa/telegram/services_content.py",
+            "path": "yuqa/telegram/services/services_content.py",
             "role": "Owns card, banner, shop, starter-card, and admin content flows.",
         },
         {
-            "path": "yuqa/telegram/services_support.py",
+            "path": "yuqa/telegram/services/services_support.py",
             "role": "Holds small shared service dataclasses and utility helpers.",
         },
         {
-            "path": "yuqa/telegram/router.py",
+            "path": TELEGRAM_ROUTER_SURFACE,
+            "role": "Stable import surface for the Telegram router package.",
+        },
+        {
+            "path": TELEGRAM_ROUTER_ENTRY,
             "role": "Thin compatibility surface that builds the router from public/admin registration modules.",
         },
         {
-            "path": "yuqa/telegram/router_public.py",
+            "path": TELEGRAM_ROUTER_PUBLIC,
             "role": "Registers public commands, callbacks, and non-admin wizard state handlers.",
         },
         {
-            "path": "yuqa/telegram/router_admin.py",
+            "path": TELEGRAM_ROUTER_ADMIN,
             "role": "Registers admin commands, AdminCallback flows, and admin-only wizard state handlers.",
         },
         {
-            "path": "yuqa/telegram/router_wizards_players.py",
+            "path": "yuqa/telegram/router/router_wizards_players.py",
             "role": "Owns clan, idea, profile nickname, and admin player wizard steps.",
         },
         {
-            "path": "yuqa/telegram/router_wizards_progression.py",
+            "path": "yuqa/telegram/router/router_wizards_progression.py",
             "role": "Owns battle pass and free-reward wizard steps.",
         },
         {
-            "path": "yuqa/telegram/router_wizards_content.py",
+            "path": "yuqa/telegram/router/router_wizards_content.py",
             "role": "Thin compatibility facade that re-exports the content wizard families.",
         },
         {
-            "path": "yuqa/telegram/router_wizards_cards.py",
+            "path": "yuqa/telegram/router/router_wizards_cards.py",
             "role": "Owns universe, card, profile background, and starter-card wizard steps.",
         },
         {
-            "path": "yuqa/telegram/router_wizards_banners.py",
+            "path": "yuqa/telegram/router/router_wizards_banners.py",
             "role": "Owns banner creation and banner-reward wizard steps.",
         },
         {
-            "path": "yuqa/telegram/router_wizards_shop.py",
+            "path": "yuqa/telegram/router/router_wizards_shop.py",
             "role": "Owns shop item wizard steps.",
         },
         {
-            "path": "yuqa/telegram/router_battle.py",
+            "path": "yuqa/telegram/router/router_battle.py",
             "role": "Owns shared battle command and matchmaking entry helpers.",
         },
         {
-            "path": "yuqa/telegram/router_views.py",
+            "path": TELEGRAM_ROUTER_VIEWS,
             "role": "Renders Telegram screens and admin sections reused by handlers.",
         },
         {
-            "path": "yuqa/telegram/router_helpers.py",
+            "path": TELEGRAM_ROUTER_HELPERS,
             "role": "Holds parsing, pagination, and media extraction helpers for router flows.",
         },
     ]
@@ -236,59 +335,22 @@ def _module_groups() -> dict[str, list[str]]:
     return {
         "runtime_bootstrap": ["main.py", "yuqa/main.py", "yuqa/telegram/config.py"],
         "telegram_flow": [
-            "yuqa/telegram/router.py",
-            "yuqa/telegram/router_public.py",
-            "yuqa/telegram/router_admin.py",
+            *TELEGRAM_ROUTER_GROUP,
             "yuqa/telegram/states.py",
             "yuqa/telegram/callbacks.py",
         ],
-        "telegram_wizards": [
-            "yuqa/telegram/router_wizards_players.py",
-            "yuqa/telegram/router_wizards_progression.py",
-            "yuqa/telegram/router_wizards_content.py",
-            "yuqa/telegram/router_wizards_cards.py",
-            "yuqa/telegram/router_wizards_banners.py",
-            "yuqa/telegram/router_wizards_shop.py",
-            "yuqa/telegram/router_battle.py",
-        ],
+        "telegram_wizards": TELEGRAM_WIZARD_GROUP,
         "telegram_views": [
-            "yuqa/telegram/router_views.py",
-            "yuqa/telegram/texts.py",
-            "yuqa/telegram/ui.py",
+            TELEGRAM_ROUTER_VIEWS,
+            TELEGRAM_TEXTS_SURFACE,
+            TELEGRAM_TEXTS_ENTRY,
+            TELEGRAM_UI_SURFACE,
+            TELEGRAM_UI_ENTRY,
             "yuqa/telegram/reply.py",
         ],
-        "telegram_texts": [
-            "yuqa/telegram/texts.py",
-            "yuqa/telegram/texts_navigation.py",
-            "yuqa/telegram/texts_battle.py",
-            "yuqa/telegram/texts_battle_pass.py",
-            "yuqa/telegram/texts_profile.py",
-            "yuqa/telegram/texts_cards.py",
-            "yuqa/telegram/texts_rewards.py",
-            "yuqa/telegram/texts_ideas.py",
-            "yuqa/telegram/texts_catalog.py",
-            "yuqa/telegram/texts_admin.py",
-        ],
-        "telegram_ui": [
-            "yuqa/telegram/ui.py",
-            "yuqa/telegram/ui_navigation.py",
-            "yuqa/telegram/ui_battle.py",
-            "yuqa/telegram/ui_cards.py",
-            "yuqa/telegram/ui_profile.py",
-            "yuqa/telegram/ui_catalog.py",
-            "yuqa/telegram/ui_rewards.py",
-            "yuqa/telegram/ui_ideas.py",
-            "yuqa/telegram/ui_admin.py",
-        ],
-        "telegram_services": [
-            "yuqa/telegram/services.py",
-            "yuqa/telegram/services_battles.py",
-            "yuqa/telegram/services_battle_pass.py",
-            "yuqa/telegram/services_players.py",
-            "yuqa/telegram/services_social.py",
-            "yuqa/telegram/services_content.py",
-            "yuqa/telegram/services_support.py",
-        ],
+        "telegram_texts": TELEGRAM_TEXTS_GROUP,
+        "telegram_ui": TELEGRAM_UI_GROUP,
+        "telegram_services": TELEGRAM_SERVICES_GROUP,
         "storage": [
             "yuqa/infrastructure/local.py",
             "yuqa/infrastructure/memory.py",
@@ -315,11 +377,14 @@ def _change_playbooks() -> dict[str, list[str]]:
     return {
         "runtime_bug": [
             "yuqa/main.py",
-            "yuqa/telegram/services.py",
-            "yuqa/telegram/router.py",
-            "yuqa/telegram/router_public.py",
-            "yuqa/telegram/router_admin.py",
-            "yuqa/telegram/router_views.py",
+            TELEGRAM_SERVICES_SURFACE,
+            TELEGRAM_SERVICES_ENTRY,
+            TELEGRAM_SERVICES_CONTRACTS,
+            TELEGRAM_ROUTER_SURFACE,
+            TELEGRAM_ROUTER_ENTRY,
+            TELEGRAM_ROUTER_PUBLIC,
+            TELEGRAM_ROUTER_ADMIN,
+            TELEGRAM_ROUTER_VIEWS,
         ],
         "new_domain_rule": [
             "yuqa/<feature>/domain/services.py",
@@ -327,18 +392,21 @@ def _change_playbooks() -> dict[str, list[str]]:
             "tests/test_<feature>.py",
         ],
         "telegram_copy_or_layout": [
-            "yuqa/telegram/router_views.py",
-            "yuqa/telegram/texts.py",
-            "yuqa/telegram/texts_<family>.py",
-            "yuqa/telegram/ui.py",
-            "yuqa/telegram/ui_<family>.py",
+            TELEGRAM_ROUTER_VIEWS,
+            TELEGRAM_TEXTS_SURFACE,
+            TELEGRAM_TEXTS_ENTRY,
+            "yuqa/telegram/texts/texts_<family>.py",
+            TELEGRAM_UI_SURFACE,
+            TELEGRAM_UI_ENTRY,
+            "yuqa/telegram/ui/ui_<family>.py",
             "tests/test_telegram_layer.py",
         ],
         "fsm_or_handler_flow": [
-            "yuqa/telegram/router.py",
-            "yuqa/telegram/router_public.py",
-            "yuqa/telegram/router_admin.py",
-            "yuqa/telegram/router_wizards_<family>.py",
+            TELEGRAM_ROUTER_SURFACE,
+            TELEGRAM_ROUTER_ENTRY,
+            TELEGRAM_ROUTER_PUBLIC,
+            TELEGRAM_ROUTER_ADMIN,
+            "yuqa/telegram/router/router_wizards_<family>.py",
             "yuqa/telegram/states.py",
             "tests/test_router_wiring.py",
             "tests/test_telegram_services.py",
@@ -372,8 +440,8 @@ def build_summary() -> dict[str, object]:
         "entrypoints": [
             "main.py",
             "yuqa/main.py",
-            "yuqa/telegram/router.py",
-            "yuqa/telegram/services.py",
+            TELEGRAM_ROUTER_SURFACE,
+            TELEGRAM_SERVICES_SURFACE,
         ],
         "commands": {
             "install": "make sync",
@@ -390,6 +458,28 @@ def build_summary() -> dict[str, object]:
             "telegram": "Bot transport, handlers, texts, UI, callbacks, and config.",
             "infrastructure": "Persistence adapters for in-memory, local catalog, and SQLAlchemy.",
             "shared": "Enums, IDs, errors, and reusable value objects.",
+        },
+        "public_surfaces": {
+            "router": {
+                "import": "yuqa.telegram.router",
+                "path": TELEGRAM_ROUTER_SURFACE,
+                "implementation": TELEGRAM_ROUTER_ENTRY,
+            },
+            "services": {
+                "import": "yuqa.telegram.services",
+                "path": TELEGRAM_SERVICES_SURFACE,
+                "implementation": TELEGRAM_SERVICES_ENTRY,
+            },
+            "texts": {
+                "import": "yuqa.telegram.texts",
+                "path": TELEGRAM_TEXTS_SURFACE,
+                "implementation": TELEGRAM_TEXTS_ENTRY,
+            },
+            "ui": {
+                "import": "yuqa.telegram.ui",
+                "path": TELEGRAM_UI_SURFACE,
+                "implementation": TELEGRAM_UI_ENTRY,
+            },
         },
         "runtime_flow": _runtime_flow(),
         "module_groups": _module_groups(),
@@ -420,19 +510,24 @@ def build_summary() -> dict[str, object]:
         ],
         "recommended_start_points": {
             "runtime_bootstrap": "yuqa/main.py",
-            "telegram_handlers": "yuqa/telegram/router.py",
-            "telegram_public_handlers": "yuqa/telegram/router_public.py",
-            "telegram_admin_handlers": "yuqa/telegram/router_admin.py",
-            "service_orchestration": "yuqa/telegram/services.py",
-            "battle_orchestration": "yuqa/telegram/services_battles.py",
-            "battle_pass_orchestration": "yuqa/telegram/services_battle_pass.py",
-            "player_profile_orchestration": "yuqa/telegram/services_players.py",
-            "social_orchestration": "yuqa/telegram/services_social.py",
-            "content_admin_orchestration": "yuqa/telegram/services_content.py",
-            "telegram_views": "yuqa/telegram/router_views.py",
-            "telegram_copy": "yuqa/telegram/texts.py",
-            "telegram_markup": "yuqa/telegram/ui.py",
-            "router_helpers": "yuqa/telegram/router_helpers.py",
+            "telegram_router_surface": TELEGRAM_ROUTER_SURFACE,
+            "telegram_services_surface": TELEGRAM_SERVICES_SURFACE,
+            "telegram_texts_surface": TELEGRAM_TEXTS_SURFACE,
+            "telegram_ui_surface": TELEGRAM_UI_SURFACE,
+            "telegram_handlers": TELEGRAM_ROUTER_ENTRY,
+            "telegram_public_handlers": TELEGRAM_ROUTER_PUBLIC,
+            "telegram_admin_handlers": TELEGRAM_ROUTER_ADMIN,
+            "service_orchestration": TELEGRAM_SERVICES_ENTRY,
+            "service_contracts": TELEGRAM_SERVICES_CONTRACTS,
+            "battle_orchestration": "yuqa/telegram/services/services_battles.py",
+            "battle_pass_orchestration": "yuqa/telegram/services/services_battle_pass.py",
+            "player_profile_orchestration": "yuqa/telegram/services/services_players.py",
+            "social_orchestration": "yuqa/telegram/services/services_social.py",
+            "content_admin_orchestration": "yuqa/telegram/services/services_content.py",
+            "telegram_views": TELEGRAM_ROUTER_VIEWS,
+            "telegram_copy": TELEGRAM_TEXTS_ENTRY,
+            "telegram_markup": TELEGRAM_UI_ENTRY,
+            "router_helpers": TELEGRAM_ROUTER_HELPERS,
             "local_storage": "yuqa/infrastructure/local.py",
             "database_storage": "yuqa/infrastructure/sqlalchemy/repositories.py",
         },
@@ -468,7 +563,10 @@ def check_boundaries() -> list[str]:
                 errors.append(
                     f"{module.path.relative_to(ROOT)} imports {imported}; domain code must not depend on transport or persistence"
                 )
-            elif owner in LAYER_GROUPS["application"] and target in LAYER_GROUPS["telegram"]:
+            elif (
+                owner in LAYER_GROUPS["application"]
+                and target in LAYER_GROUPS["telegram"]
+            ):
                 errors.append(
                     f"{module.path.relative_to(ROOT)} imports {imported}; application should remain transport-agnostic"
                 )

@@ -17,7 +17,7 @@ from yuqa.shared.enums import (
 )
 from yuqa.shared.value_objects.deck_slots import DeckSlots
 from yuqa.shared.value_objects.stat_block import StatBlock
-from yuqa.telegram.services import TelegramServices
+from yuqa.telegram.services.services import TelegramServices
 
 
 def _sqlite_url(path: Path) -> str:

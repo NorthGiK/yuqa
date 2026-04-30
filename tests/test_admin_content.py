@@ -48,7 +48,7 @@ from yuqa.telegram.router import (
     start_free_rewards_edit,
 )
 from yuqa.telegram.states import AdminPlayerCardEdit, CardCreate
-from yuqa.telegram.services import TelegramServices
+from yuqa.telegram.services.services import TelegramServices
 
 
 @pytest.mark.asyncio

@@ -46,9 +46,9 @@ from yuqa.telegram.router import (
     show_tops,
     search_battle,
 )
-from yuqa.telegram.router_views import show_battle_round, show_battle_switch
-from yuqa.telegram.services import TelegramServices
-from yuqa.telegram.texts import (
+from yuqa.telegram.router.router_views import show_battle_round, show_battle_switch
+from yuqa.telegram.services.services import TelegramServices
+from yuqa.telegram.texts.texts import (
     admin_text,
     battle_text,
     cards_text,
@@ -59,7 +59,7 @@ from yuqa.telegram.texts import (
     profile_text,
     tops_text,
 )
-from yuqa.telegram.ui import (
+from yuqa.telegram.ui.ui import (
     admin_banner_markup,
     admin_choice_markup,
     admin_markup,
@@ -458,7 +458,7 @@ async def test_card_image_accepts_photo_and_effects_are_human_friendly() -> None
     """The wizard should accept Telegram photos and readable effect syntax."""
 
     from yuqa.telegram.router import _parse_effects
-    from yuqa.telegram.texts import ability_effects_guide
+    from yuqa.telegram.texts.texts import ability_effects_guide
 
     photo = [SimpleNamespace(file_id="photo-file-id")]
     message = Message(from_user=User(1), photo=photo)

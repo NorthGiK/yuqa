@@ -3,10 +3,13 @@
 from asyncio import run
 from dataclasses import dataclass
 
+from yuqa.battles.domain.entities import Battle
 from yuqa.infrastructure.sqlalchemy.migrations import upgrade_head
 from yuqa.telegram.bot import build_bot, build_dispatcher
+from yuqa.telegram.compat import Bot
 from yuqa.telegram.config import Settings
 from yuqa.telegram.services import TelegramServices
+from yuqa.telegram.services.services_contracts import BattleTimeoutNotifier
 from yuqa.telegram.texts import battle_status_text
 from yuqa.telegram.ui import battle_actions_markup
 
@@ -59,10 +62,13 @@ def entrypoint() -> int:
     return 0
 
 
-def _build_battle_timeout_notifier(bot, services):
+def _build_battle_timeout_notifier(
+    bot: Bot,
+    services: TelegramServices,
+) -> BattleTimeoutNotifier:
     """Build a notifier that sends one battle update after automatic timeout."""
 
-    async def _notify(battle, *, reason: str | None = None) -> None:
+    async def _notify(battle: Battle, *, reason: str | None = None) -> None:
         for player_id in (battle.player_one_id, battle.player_two_id):
             summary = services.battle_round_summary(battle, player_id)
             text = battle_status_text(

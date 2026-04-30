@@ -14,7 +14,7 @@ from yuqa.players.domain.entities import Player
 from yuqa.quests.domain.entities import QuestDefinition, QuestProgress, QuestReward
 from yuqa.quests.domain.services import QuestResetService, QuestService
 from yuqa.shared.enums import QuestActionType, QuestPeriod
-from yuqa.telegram.services import TelegramServices
+from yuqa.telegram.services.services import TelegramServices
 
 
 def test_quest_completion_and_reset():

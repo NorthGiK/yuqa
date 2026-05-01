@@ -69,7 +69,7 @@ from src.telegram.router.views import (
     show_tops,
 )
 from src.telegram.states import ClanCreation, IdeaProposal, ProfileEdit
-from src.telegram.texts.texts import (
+from src.telegram.texts import (
     banner_text,
     battle_result_text,
     battle_started_text,
@@ -77,7 +77,7 @@ from src.telegram.texts.texts import (
     card_level_up_confirm_text,
     profile_background_text,
 )
-from src.telegram.ui.ui import (
+from src.telegram.ui import (
     COLLECTION_MENU_BUTTON,
     MAIN_MENU_BUTTON_TEXTS,
     banner_markup,

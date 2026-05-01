@@ -34,6 +34,12 @@ test-file:
 	$(UV) run pytest -q "$(FILE)"
 	make clean
 
+docker-build:
+	docker build -t yuqa:latest ./
+
+docker-run: docker-build
+	docker run -d yuqa:latest
+
 lint:
 	$(UV) run ruff check src tests main.py
 

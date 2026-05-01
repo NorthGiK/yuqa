@@ -15,12 +15,12 @@ from src.telegram.states import (
     UniverseCreate,
     UniverseDelete,
 )
-from src.telegram.texts.texts import (
+from src.telegram.texts import (
     ability_effects_guide,
     card_wizard_text,
     profile_background_wizard_text,
 )
-from src.telegram.ui.ui import admin_choice_markup, admin_wizard_markup
+from src.telegram.ui import admin_choice_markup, admin_wizard_markup
 
 
 async def start_universe_create(message: Message, state: FSMContext):

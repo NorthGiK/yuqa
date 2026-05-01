@@ -4,13 +4,13 @@ from src.shared.errors import DomainError, ValidationError
 from src.telegram.compat import CommandObject, Message
 from src.telegram.reply import send_alert, send_or_edit
 from src.telegram.router.views import show_battle
-from src.telegram.texts.texts import (
+from src.telegram.texts import (
     battle_result_text,
     battle_started_text,
     battle_status_text,
     battle_text,
 )
-from src.telegram.ui.ui import battle_actions_markup, battle_markup
+from src.telegram.ui import battle_actions_markup, battle_markup
 
 
 async def start_battle(message: Message, services, command: CommandObject):

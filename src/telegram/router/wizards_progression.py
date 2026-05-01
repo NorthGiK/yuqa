@@ -16,12 +16,12 @@ from src.telegram.states import (
     BattlePassSeasonDelete,
     FreeRewardsEdit,
 )
-from src.telegram.texts.texts import (
+from src.telegram.texts import (
     battle_pass_level_wizard_text,
     battle_pass_season_wizard_text,
     free_rewards_edit_guide,
 )
-from src.telegram.ui.ui import admin_wizard_markup
+from src.telegram.ui import admin_wizard_markup
 
 
 async def start_battle_pass_level_create(

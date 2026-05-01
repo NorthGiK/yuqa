@@ -49,7 +49,7 @@ from src.telegram.router import (
 )
 from src.telegram.router.views import show_battle_round, show_battle_switch
 from src.telegram.services.services import TelegramServices
-from src.telegram.texts.texts import (
+from src.telegram.texts import (
     admin_text,
     battle_text,
     cards_text,
@@ -60,7 +60,7 @@ from src.telegram.texts.texts import (
     profile_text,
     tops_text,
 )
-from src.telegram.ui.ui import (
+from src.telegram.ui import (
     admin_banner_markup,
     admin_choice_markup,
     admin_markup,
@@ -565,7 +565,7 @@ async def test_card_image_accepts_photo_and_effects_are_human_friendly(
     """The wizard should accept Telegram photos and readable effect syntax."""
 
     from src.telegram.router import _parse_effects
-    from src.telegram.texts.texts import ability_effects_guide
+    from src.telegram.texts import ability_effects_guide
 
     monkeypatch.setenv("YUQA_DATA_DIR", str(tmp_path))
     photo = [SimpleNamespace(file_id="photo-file-id")]

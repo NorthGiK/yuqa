@@ -26,7 +26,7 @@ from src.telegram.states import (
     UniverseCreate,
     UniverseDelete,
 )
-from src.telegram.texts.texts import (
+from src.telegram.texts import (
     banner_pool_text,
     banner_text,
     banner_wizard_text,
@@ -35,7 +35,7 @@ from src.telegram.texts.texts import (
     profile_background_wizard_text,
     shop_wizard_text,
 )
-from src.telegram.ui.ui import admin_banner_markup, admin_choice_markup, admin_wizard_markup
+from src.telegram.ui import admin_banner_markup, admin_choice_markup, admin_wizard_markup
 from src.telegram.router.wizards_banners import (
     _banner_reward_finish,
     banner_end_at,

@@ -9,8 +9,8 @@ from src.telegram.router.helpers import (
     _templates,
 )
 from src.telegram.states import BannerCreate
-from src.telegram.texts.texts import banner_pool_text, banner_text, banner_wizard_text
-from src.telegram.ui.ui import (
+from src.telegram.texts import banner_pool_text, banner_text, banner_wizard_text
+from src.telegram.ui import (
     admin_banner_markup,
     admin_choice_markup,
     admin_wizard_markup,

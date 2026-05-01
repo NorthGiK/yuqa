@@ -4,8 +4,8 @@ from src.shared.enums import ResourceType
 from src.telegram.compat import FSMContext, Message
 from src.telegram.router.helpers import _parse_int
 from src.telegram.states import ShopCreate
-from src.telegram.texts.texts import shop_wizard_text
-from src.telegram.ui.ui import admin_choice_markup
+from src.telegram.texts import shop_wizard_text
+from src.telegram.ui import admin_choice_markup
 
 
 async def start_shop_create(message: Message, state: FSMContext):

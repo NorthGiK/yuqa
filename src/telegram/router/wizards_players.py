@@ -12,8 +12,8 @@ from src.telegram.states import (
     PlayerDelete,
     ProfileEdit,
 )
-from src.telegram.texts.texts import clan_text, idea_wizard_text
-from src.telegram.ui.ui import admin_choice_markup, admin_wizard_markup, clan_markup
+from src.telegram.texts import clan_text, idea_wizard_text
+from src.telegram.ui import admin_choice_markup, admin_wizard_markup, clan_markup
 
 
 async def start_clan_creation(message: Message, state: FSMContext):

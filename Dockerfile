@@ -3,21 +3,21 @@ FROM python:3.14-slim
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
     PIP_NO_CACHE_DIR=1 \
-    YUQA_DATA_DIR=/data \
-    DATABASE_URL=sqlite:////data/yuqa.db \
-    YUQA_AUTO_MIGRATE=true \
     UV_NO_DEV=1
 
 WORKDIR /app
 
 RUN useradd --create-home --uid 10001 appuser
 
-COPY pyproject.toml README.md main.py alembic.ini ./
-COPY alembic ./alembic
+# copying application
+COPY pyproject.toml README.md main.py alembic.ini .env ./
 COPY src ./src
+COPY alembic ./alembic
 
+# installing uv
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
 
+# install dependencies
 RUN /bin/uv sync --no-cache --extra docker
 
 RUN mkdir -p /data && chown -R appuser:appuser /app /data

@@ -15,7 +15,7 @@ from src.telegram.router.helpers import (
     _templates,
 )
 from src.telegram.services.services import TelegramServices
-from src.telegram.texts.texts import (
+from src.telegram.texts import (
     admin_cards_text,
     admin_profile_backgrounds_text,
     admin_text,
@@ -49,7 +49,7 @@ from src.telegram.texts.texts import (
     card_template_text,
     card_text,
 )
-from src.telegram.ui.ui import (
+from src.telegram.ui import (
     admin_banner_markup,
     admin_idea_detail_markup,
     admin_ideas_markup,

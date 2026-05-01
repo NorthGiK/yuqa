@@ -20,7 +20,6 @@ docker = [
 ]
 production = [
   "psycopg2>=2.9.11",
-  "nuitka>=4.0.8",
 ]
 dev = [
   "pytest>=9.0.3",

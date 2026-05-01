@@ -10,12 +10,15 @@ from src.shared.enums import ResourceType
 @dataclass(slots=True)
 class QuestService:
     """Complete a quest and apply its reward."""
-
+    
     def complete(
-        self, player: Player, quest: QuestDefinition, progress: QuestProgress
+        self,
+        player: Player,
+        quest: QuestDefinition,
+        progress: QuestProgress,
     ) -> QuestReward:
         """Mark the quest as done and pay the reward."""
-
+        
         progress.completed = True
         reward = quest.reward
         if reward.coins:
@@ -32,17 +35,19 @@ class QuestService:
 @dataclass(slots=True)
 class QuestResetService:
     """Reset quest progress lists after the refresh time."""
-
+    
     def reset_daily(self, progresses: list[QuestProgress]) -> None:
         """Reset daily progress."""
-
+        
         self._reset(progresses)
-
+    
+    
     def reset_weekly(self, progresses: list[QuestProgress]) -> None:
         """Reset weekly progress."""
-
+        
         self._reset(progresses)
-
+    
+    
     @staticmethod
     def _reset(progresses: list[QuestProgress]) -> None:
         for progress in progresses:

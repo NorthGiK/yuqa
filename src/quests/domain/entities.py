@@ -8,7 +8,7 @@ from src.shared.enums import QuestActionType, QuestPeriod
 @dataclass(frozen=True, slots=True)
 class QuestReward:
     """Reward bundle for a quest or battle pass level."""
-
+    
     coins: int = 0
     crystals: int = 0
     orbs: int = 0
@@ -18,7 +18,7 @@ class QuestReward:
 @dataclass(slots=True)
 class QuestDefinition:
     """Quest metadata configured by the admin panel."""
-
+    
     id: int
     period: QuestPeriod
     action_type: QuestActionType
@@ -29,7 +29,7 @@ class QuestDefinition:
 @dataclass(slots=True)
 class QuestProgress:
     """Boolean progress for one player and one quest."""
-
+    
     player_id: int
     quest_id: int
     completed: bool = False

@@ -5,7 +5,7 @@ from enum import Enum
 
 class Universe(str, Enum):
     """Anime universe of a card."""
-
+    
     UNKNOWN = "unknown"
     ORIGINAL = "original"
     NARUTO = "naruto"
@@ -17,7 +17,7 @@ class Universe(str, Enum):
 
 class Rarity(str, Enum):
     """Card rarity."""
-
+    
     COMMON = "common"
     RARE = "rare"
     EPIC = "epic"
@@ -29,7 +29,7 @@ class Rarity(str, Enum):
 
 class CardClass(str, Enum):
     """Battle role of a card."""
-
+    
     MELEE = "melee"
     TANK = "tank"
     RANGER = "ranger"
@@ -38,7 +38,7 @@ class CardClass(str, Enum):
 
 class AbilityTarget(str, Enum):
     """Target group for an ability effect."""
-
+    
     SELF = "self"
     TEAMMATES_DECK = "teammates_deck"
     OPPONENTS_DECK = "opponents_deck"
@@ -46,7 +46,7 @@ class AbilityTarget(str, Enum):
 
 class AbilityStat(str, Enum):
     """Stat affected by an ability effect."""
-
+    
     DAMAGE = "damage"
     HEALTH = "health"
     DEFENSE = "defense"
@@ -54,21 +54,21 @@ class AbilityStat(str, Enum):
 
 class CardForm(str, Enum):
     """Visual and stat form of a card."""
-
+    
     BASE = "base"
     ASCENDED = "ascended"
 
 
 class BannerType(str, Enum):
     """Banner category."""
-
+    
     NORMAL = "normal"
     EVENT = "event"
 
 
 class ProfileBackgroundRarity(str, Enum):
     """Profile-background rarity."""
-
+    
     EPIC = "epic"
     LEGENDARY = "legendary"
     LIMITED = "limited"
@@ -76,7 +76,7 @@ class ProfileBackgroundRarity(str, Enum):
 
 class ResourceType(str, Enum):
     """Wallet resource types."""
-
+    
     COINS = "coins"
     CRYSTALS = "crystals"
     ORBS = "orbs"
@@ -86,14 +86,14 @@ class ResourceType(str, Enum):
 
 class QuestPeriod(str, Enum):
     """Quest refresh period."""
-
+    
     DAILY = "daily"
     WEEKLY = "weekly"
 
 
 class QuestActionType(str, Enum):
     """Quest completion trigger."""
-
+    
     BATTLE_WIN = "battle_win"
     SHOP_PURCHASE = "shop_purchase"
     CARD_ASCEND = "card_ascend"
@@ -102,14 +102,14 @@ class QuestActionType(str, Enum):
 
 class ClanRole(str, Enum):
     """Clan membership role."""
-
+    
     LEADER = "leader"
     MEMBER = "member"
 
 
 class BattleActionType(str, Enum):
     """Action types in combat."""
-
+    
     ATTACK = "attack"
     BLOCK = "block"
     BONUS = "bonus"
@@ -119,7 +119,7 @@ class BattleActionType(str, Enum):
 
 class BattleStatus(str, Enum):
     """Battle lifecycle status."""
-
+    
     WAITING = "waiting"
     ACTIVE = "active"
     FINISHED = "finished"
@@ -127,7 +127,7 @@ class BattleStatus(str, Enum):
 
 class RewardType(str, Enum):
     """Banner reward kind."""
-
+    
     RESOURCE = "resource"
     CARD = "card"
     PROFILE_BACKGROUND = "profile_background"
@@ -135,7 +135,7 @@ class RewardType(str, Enum):
 
 class IdeaStatus(str, Enum):
     """Lifecycle status for user-submitted game ideas."""
-
+    
     PENDING = "pending"
     PUBLISHED = "published"
     COLLECTED = "collected"

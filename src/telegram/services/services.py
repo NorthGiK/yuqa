@@ -35,12 +35,14 @@ from src.infrastructure.sqlalchemy.repositories import (
     PersistentPremiumBattlePassProgressRepository,
     PersistentPremiumBattlePassSeasonRepository,
     PersistentProfileBackgroundRepository,
+    PersistentQuestRepository,
     PersistentShopRepository,
     PersistentStateStore,
 )
 from src.ideas.domain.services import IdeaService
 from src.quests.domain.entities import QuestReward
-from src.shared.enums import IdeaStatus, Rarity, ResourceType, Universe
+from src.quests.domain.services import QuestService
+from src.shared.enums import IdeaStatus, Rarity, ResourceType
 from src.shop.domain.services import ShopService
 from src.telegram.services.contracts import (
     BannerRepositoryLike,
@@ -55,6 +57,7 @@ from src.telegram.services.contracts import (
     PlayerCardRepositoryLike,
     PlayerRepositoryLike,
     ProfileBackgroundRepositoryLike,
+    QuestRepositoryLike,
     ShopRepositoryLike,
 )
 from src.telegram.services.battle_pass import BattlePassServiceMixin
@@ -65,6 +68,7 @@ from src.telegram.services.players import (
     _FREE_CARD_RARITIES,
     _FREE_RESOURCE_TYPES,
 )
+from src.telegram.services.quests import QuestServiceMixin
 from src.telegram.services.social import SocialServiceMixin
 
 
@@ -101,6 +105,7 @@ class TelegramServices(
     PlayerProfileServiceMixin,
     SocialServiceMixin,
     ContentAdminServiceMixin,
+    QuestServiceMixin,
 ):
     """Bundle repositories and domain services for the bot."""
 
@@ -119,6 +124,8 @@ class TelegramServices(
     premium_battle_pass_seasons: BattlePassSeasonRepositoryLike
     battle_pass_progress: BattlePassProgressRepositoryLike
     premium_battle_pass_progress: BattlePassProgressRepositoryLike
+    quests: QuestRepositoryLike
+    quest_service: QuestService
     search_queue: dict[int, int]
     deck_drafts: dict[int, list[int]]
     action_events: list[tuple[int, str]]
@@ -194,6 +201,8 @@ class TelegramServices(
         self.premium_battle_pass_progress = (
             PersistentPremiumBattlePassProgressRepository(self.store)
         )
+        self.quests = PersistentQuestRepository(self.store)
+        self.quest_service = QuestService()
         self.search_queue: dict[int, int] = self.store.search_queue
         self.deck_drafts: dict[int, list[int]] = self.store.deck_drafts
         self.action_events: list[tuple[int, str]] = self.store.action_events

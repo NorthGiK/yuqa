@@ -1,5 +1,7 @@
 """Factory helpers for the Telegram bot runtime."""
 
+from src.telegram.config import Settings
+from src.telegram.services.services import TelegramServices
 from src.telegram.compat import (
     BaseMiddleware,
     Bot,
@@ -31,13 +33,13 @@ class ActionRecorderMiddleware(BaseMiddleware):
         return await handler(event, data)
 
 
-def build_bot(settings) -> Bot:
+def build_bot(settings: Settings) -> Bot:
     """Build a bot with HTML as the default parse mode."""
 
     return Bot(settings.token, default=DefaultBotProperties(parse_mode=ParseMode.HTML))
 
 
-def build_dispatcher(settings, services) -> Dispatcher:
+def build_dispatcher(settings: Settings, services: TelegramServices) -> Dispatcher:
     """Build a dispatcher with the application router attached."""
 
     dispatcher = Dispatcher(storage=MemoryStorage())

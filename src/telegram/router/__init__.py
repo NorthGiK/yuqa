@@ -1,6 +1,8 @@
 """Router compatibility surface and builder for the Telegram bot."""
 
 from src.telegram.compat import Router
+from src.telegram.config import Settings
+from src.telegram.services.services import TelegramServices
 from src.telegram.router.admin import register_admin_handlers
 from src.telegram.router.battle import cancel_battle_search, search_battle, start_battle
 from src.telegram.router.helpers import _parse_effects
@@ -71,7 +73,7 @@ from src.telegram.router.wizards_progression import (
 )
 
 
-def build_router(services, settings) -> Router:
+def build_router(services: TelegramServices, settings: Settings) -> Router:
     """Build a router that closes over the runtime dependencies."""
 
     router = Router(name="yuqa")

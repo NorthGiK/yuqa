@@ -47,6 +47,23 @@ Edit the implementation modules inside those directories when behavior changes.
   pragmas or bootstrap side effects. Prefer type hints and clear names for
   ordinary control flow.
 
+## Quest action completion
+
+Routers can complete cooldown-based action quests through one service call:
+
+```python
+await services.complete_action_quest(
+    player_id=telegram_id,
+    quest_id=101,
+    action_type=QuestActionType.CARD_LEVEL_UP,
+    reward=QuestReward(coins=25),
+    cooldown=timedelta(hours=2),
+)
+```
+
+The helper checks the player's quest cooldown, applies the supplied reward only
+when the quest is ready, and persists the next cooldown timestamp.
+
 ## AI-agent workflow
 
 The repository includes an agent-focused inspection script and guide:
@@ -70,6 +87,8 @@ make agent-check
   database on the first boot.
 - Runtime state such as players, cards, clans, finished battle results, and
   deck drafts is persisted so restarts do not reset player progress.
+- Quest definitions and per-player quest cooldowns are persisted with runtime
+  state.
 - Active battles and matchmaking queues are cleared on service startup because
   in-progress combat timers are runtime-only.
 - Alembic manages schema changes via `make db-upgrade`.

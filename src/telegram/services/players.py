@@ -306,6 +306,9 @@ class PlayerProfileServiceMixin(_PlayerProfileServiceMixinBase):
         for battle_pass_key in list(self.premium_battle_pass_progress.items):
             if battle_pass_key[0] == telegram_id:
                 await self.premium_battle_pass_progress.delete(battle_pass_key)
+        for quest_key in list(self.quests.progress_items):
+            if quest_key[0] == telegram_id:
+                await self.quests.delete_progress(quest_key)
 
         for battle_id, battle in list(self.battles.items.items()):
             if telegram_id in {battle.player_one_id, battle.player_two_id}:

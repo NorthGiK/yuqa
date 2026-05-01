@@ -4,6 +4,7 @@ from src.shared.errors import DomainError, EntityNotFoundError, ValidationError
 from src.shared.enums import Rarity, ResourceType
 from src.telegram.callbacks import AdminCallback
 from src.telegram.compat import CallbackQuery, Command, CommandObject, FSMContext, Message, Router
+from src.telegram.config import Settings
 from src.telegram.reply import send_notice
 from src.telegram.router.helpers import _parse_int, _profile_backgrounds, _templates
 from src.telegram.router.views import show_admin
@@ -36,6 +37,7 @@ from src.telegram.texts import (
     shop_wizard_text,
 )
 from src.telegram.ui import admin_banner_markup, admin_choice_markup, admin_wizard_markup
+from src.telegram.services.services import TelegramServices
 from src.telegram.router.wizards_banners import (
     _banner_reward_finish,
     banner_end_at,
@@ -92,23 +94,31 @@ from src.telegram.router.wizards_progression import (
 )
 
 
-def register_admin_handlers(router: Router, services, settings) -> None:
+def register_admin_handlers(
+    router: Router,
+    services: TelegramServices,
+    settings: Settings,
+) -> None:
     """Register admin-only commands, callbacks, and state handlers."""
-
+    
     _register_admin_commands(router, services, settings)
     _register_admin_callbacks(router, services, settings)
     _register_admin_state_handlers(router, services)
 
 
-def _register_admin_commands(router: Router, services, settings) -> None:
+def _register_admin_commands(
+    router: Router,
+    services: TelegramServices,
+    settings: Settings,
+) -> None:
     """Register admin-only commands."""
-
+    
     @router.message(Command("admin"))
     async def open_admin(message: Message):
         if not message.from_user or message.from_user.id not in settings.admin_ids:
             return await message.answer("⛔ Доступ закрыт.")
         await show_admin(message, services)
-
+    
     @router.message(Command("creator_points"))
     async def award_creator_points(message: Message, command: CommandObject):
         if not message.from_user or message.from_user.id not in settings.admin_ids:
@@ -128,15 +138,23 @@ def _register_admin_commands(router: Router, services, settings) -> None:
         )
 
 
-def _register_admin_callbacks(router: Router, services, settings) -> None:
+def _register_admin_callbacks(
+    router: Router,
+    services: TelegramServices,
+    settings: Settings,
+) -> None:
     """Register the admin callback family."""
-
+    
     @router.callback_query(AdminCallback.filter())
     async def admin_actions(
-        callback: CallbackQuery, callback_data: AdminCallback, state: FSMContext
+        callback: CallbackQuery,
+        callback_data: AdminCallback,
+        state: FSMContext,
     ):
         if not callback.from_user or callback.from_user.id not in settings.admin_ids:
             return await send_notice(callback, "⛔ Доступ закрыт.")
+        if callback.message is None:
+            return
         action = callback_data.action
         if action == "section":
             return await show_admin(callback, services, callback_data.value)
@@ -380,7 +398,7 @@ def _register_admin_callbacks(router: Router, services, settings) -> None:
         return await callback.answer()
 
 
-def _register_admin_state_handlers(router: Router, services) -> None:
+def _register_admin_state_handlers(router: Router, services: TelegramServices) -> None:
     """Register admin-only state handlers."""
 
     @router.message(CardDelete.item_id)

@@ -123,6 +123,7 @@ TELEGRAM_SERVICES_GROUP = _telegram_package_paths(
     "players",
     "social",
     "content",
+    "quests",
     "support",
     include_surface=True,
 )
@@ -269,6 +270,10 @@ def _runtime_flow() -> list[dict[str, str]]:
         {
             "path": "src/telegram/services/content.py",
             "role": "Owns card, banner, shop, starter-card, and admin content flows.",
+        },
+        {
+            "path": "src/telegram/services/quests.py",
+            "role": "Owns cooldown-aware quest completion for player actions.",
         },
         {
             "path": "src/telegram/services/support.py",
@@ -523,6 +528,7 @@ def build_summary() -> dict[str, object]:
             "player_profile_orchestration": "src/telegram/services/players.py",
             "social_orchestration": "src/telegram/services/social.py",
             "content_admin_orchestration": "src/telegram/services/content.py",
+            "quest_orchestration": "src/telegram/services/quests.py",
             "telegram_views": TELEGRAM_ROUTER_VIEWS,
             "telegram_copy": TELEGRAM_TEXTS_ENTRY,
             "telegram_markup": TELEGRAM_UI_ENTRY,

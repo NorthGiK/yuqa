@@ -1,7 +1,7 @@
 """Serialization helpers for the persistent document store."""
 
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Any, Callable
 
 from src.battle_pass.domain.entities import (
@@ -28,11 +28,20 @@ from src.infrastructure.local import (
     _parse_dt,
     _profile_background_from_dict,
     _profile_background_to_dict,
+    _quest_reward_from_dict,
+    _quest_reward_to_dict,
     _shop_from_dict,
     _shop_to_dict,
 )
 from src.players.domain.entities import Player
-from src.shared.enums import AbilityStat, BattleStatus, CardForm
+from src.quests.domain.entities import QuestDefinition, QuestProgress
+from src.shared.enums import (
+    AbilityStat,
+    BattleStatus,
+    CardForm,
+    QuestActionType,
+    QuestPeriod,
+)
 from src.shared.value_objects.deck_slots import DeckSlots
 from src.shared.value_objects.resource_wallet import ResourceWallet
 
@@ -58,14 +67,14 @@ def _mapping_codec(
     load_key: Callable[[str], Any] = lambda value: int(value),
 ) -> SectionCodec:
     """Build a codec for mapping-based sections."""
-
+    
     def dump(items: dict[Any, Any]) -> dict[str, Any]:
         return {dump_key(key): dump_item(item) for key, item in items.items()}
-
+    
     def load(payload: Any) -> dict[Any, Any]:
         data = payload or {}
         return {load_key(key): load_item(value) for key, value in dict(data).items()}
-
+    
     return SectionCodec(dump=dump, load=load)
 
 
@@ -74,36 +83,36 @@ def _list_codec(
     load_item: Callable[[Any], Any] | None = None,
 ) -> SectionCodec:
     """Build a codec for list-based sections."""
-
+    
     def dump(items: list[Any]) -> list[Any]:
         if dump_item is None:
             return list(items)
         return [dump_item(item) for item in items]
-
+    
     def load(payload: Any) -> list[Any]:
         data = list(payload or [])
         if load_item is None:
             return data
         return [load_item(item) for item in data]
-
+    
     return SectionCodec(dump=dump, load=load)
 
 
 def _identity_dict_codec() -> SectionCodec:
     """Build a codec for plain dictionary payloads."""
-
+    
     def dump(payload: dict[str, Any]) -> dict[str, Any]:
         return dict(payload)
-
+    
     def load(payload: Any) -> dict[str, Any]:
         return dict(payload or {})
-
+    
     return SectionCodec(dump=dump, load=load)
 
 
 def _player_to_dict(player: Player) -> dict[str, Any]:
     """Serialize a player aggregate."""
-
+    
     return {
         "telegram_id": player.telegram_id,
         "rating": player.rating,
@@ -407,6 +416,71 @@ def _battle_pass_progress_from_dict(data: dict[str, Any]) -> BattlePassProgress:
     )
 
 
+def _quest_definition_to_dict(definition: QuestDefinition) -> dict[str, Any]:
+    """Serialize a quest definition."""
+
+    return {
+        "id": definition.id,
+        "period": definition.period.value,
+        "action_type": definition.action_type.value,
+        "reward": _quest_reward_to_dict(definition.reward),
+        "cooldown_seconds": int(definition.cooldown.total_seconds()),
+        "is_active": definition.is_active,
+    }
+
+
+def _quest_definition_from_dict(data: dict[str, Any]) -> QuestDefinition:
+    """Deserialize a quest definition."""
+
+    return QuestDefinition(
+        id=data["id"],
+        period=QuestPeriod(data.get("period", QuestPeriod.DAILY.value)),
+        action_type=QuestActionType(data["action_type"]),
+        reward=_quest_reward_from_dict(data.get("reward", {})),
+        cooldown=timedelta(seconds=int(data.get("cooldown_seconds", 0))),
+        is_active=data.get("is_active", True),
+    )
+
+
+def _quest_progress_key_to_str(value: tuple[int, int]) -> str:
+    """Serialize a compound quest-progress key."""
+
+    return f"{value[0]}:{value[1]}"
+
+
+def _quest_progress_key_from_str(value: str) -> tuple[int, int]:
+    """Deserialize a compound quest-progress key."""
+
+    player_id, quest_id = value.split(":", maxsplit=1)
+    return int(player_id), int(quest_id)
+
+
+def _quest_progress_to_dict(progress: QuestProgress) -> dict[str, Any]:
+    """Serialize quest progress."""
+
+    return {
+        "player_id": progress.player_id,
+        "quest_id": progress.quest_id,
+        "completed": progress.completed,
+        "completed_count": progress.completed_count,
+        "completed_at": _dt(progress.completed_at),
+        "cooldown_until": _dt(progress.cooldown_until),
+    }
+
+
+def _quest_progress_from_dict(data: dict[str, Any]) -> QuestProgress:
+    """Deserialize quest progress."""
+
+    return QuestProgress(
+        player_id=data["player_id"],
+        quest_id=data["quest_id"],
+        completed=data.get("completed", False),
+        completed_count=data.get("completed_count", 0),
+        completed_at=_parse_dt(data.get("completed_at")),
+        cooldown_until=_parse_dt(data.get("cooldown_until")),
+    )
+
+
 def _search_queue_codec() -> SectionCodec:
     """Build a codec for the matchmaking queue."""
 
@@ -485,6 +559,16 @@ SECTION_CODECS: dict[str, SectionCodec] = {
         dump_key=_battle_pass_progress_key_to_str,
         load_key=_battle_pass_progress_key_from_str,
     ),
+    "quest_definitions": _mapping_codec(
+        _quest_definition_to_dict,
+        _quest_definition_from_dict,
+    ),
+    "quest_progress": _mapping_codec(
+        _quest_progress_to_dict,
+        _quest_progress_from_dict,
+        dump_key=_quest_progress_key_to_str,
+        load_key=_quest_progress_key_from_str,
+    ),
     "battles": _mapping_codec(_battle_to_dict, _battle_from_dict),
     "ideas": _mapping_codec(_idea_to_dict, _idea_from_dict),
     "standard_cards": _list_codec(),
@@ -514,6 +598,8 @@ RUNTIME_SECTIONS = (
     "clans",
     "battle_pass_progress",
     "premium_battle_pass_progress",
+    "quest_definitions",
+    "quest_progress",
     "battles",
     "search_queue",
     "deck_drafts",

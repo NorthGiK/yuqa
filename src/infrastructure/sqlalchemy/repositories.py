@@ -21,6 +21,7 @@ from src.infrastructure.sqlalchemy.serialization import (
 from src.infrastructure.sqlalchemy.urls import ensure_sqlite_parent, sync_database_url
 from src.ideas.domain.entities import Idea
 from src.players.domain.entities import Player, ProfileBackgroundTemplate
+from src.quests.domain.entities import QuestDefinition, QuestProgress
 from src.shared.enums import Universe
 from src.shop.domain.entities import ShopItem
 
@@ -57,7 +58,7 @@ def create_sync_engine(database_url: str) -> Engine:
 
 class PersistentStateStore:
     """State store that persists named JSON documents into the database."""
-
+    
     def __init__(
         self,
         database_url: str,
@@ -66,7 +67,7 @@ class PersistentStateStore:
         self.database_url = database_url
         self.engine = create_sync_engine(database_url)
         StateDocumentORM.metadata.create_all(self.engine)
-
+        
         self.players: dict[int, Player] = {}
         self.player_cards: dict[int, PlayerCard] = {}
         self.cards: dict[int, CardTemplate] = {}
@@ -78,6 +79,8 @@ class PersistentStateStore:
         self.premium_battle_pass_seasons: dict[int, BattlePassSeason] = {}
         self.battle_pass_progress: dict[tuple[int, int], BattlePassProgress] = {}
         self.premium_battle_pass_progress: dict[tuple[int, int], BattlePassProgress] = {}
+        self.quest_definitions: dict[int, QuestDefinition] = {}
+        self.quest_progress: dict[tuple[int, int], QuestProgress] = {}
         self.battles: dict[int, Battle] = {}
         self.ideas: dict[int, Idea] = {}
         self.standard_cards: list[int] = []
@@ -86,7 +89,7 @@ class PersistentStateStore:
         self.search_queue: dict[int, int] = {}
         self.deck_drafts: dict[int, list[int]] = {}
         self.action_events: list[tuple[int, str]] = []
-
+        
         self.load()
         if import_catalog_path is not None:
             self._import_catalog_if_needed(Path(import_catalog_path))
@@ -96,22 +99,22 @@ class PersistentStateStore:
                 for item in Universe
                 if item.value not in {"unknown", "other"}
             ]
-
+    
     def load(self) -> None:
         """Load every document from the database into store dictionaries."""
-
+        
         with Session(self.engine) as session:
             documents = {
                 row.name: row.payload
                 for row in session.scalars(select(StateDocumentORM))
             }
-
+        
         for section, codec in SECTION_CODECS.items():
             setattr(self, section, codec.load(documents.get(section)))
-
+    
     def save(self) -> None:
         """Persist every loaded section into the database."""
-
+        
         with Session(self.engine) as session:
             for section, codec in SECTION_CODECS.items():
                 payload = codec.dump(getattr(self, section))
@@ -122,26 +125,26 @@ class PersistentStateStore:
                     row.payload = payload
                 session.add(row)
             session.commit()
-
+    
     def close(self) -> None:
         """Dispose the underlying database engine."""
-
+    
         self.engine.dispose()
-
+    
     def next_id(self, section: str) -> int:
         """Return the next numeric identifier for one mapping section."""
-
+    
         items = getattr(self, section)
         return max(items, default=0) + 1
-
+    
     def _import_catalog_if_needed(self, path: Path) -> None:
         """Seed catalog documents from the legacy JSON file on first boot."""
-
+    
         if not path.exists():
             return
         if any(bool(getattr(self, section)) for section in CATALOG_SECTIONS):
             return
-
+        
         legacy = CatalogStore(path)
         self.cards = dict(legacy.cards)
         self.profile_backgrounds = dict(legacy.profile_backgrounds)
@@ -158,16 +161,16 @@ class PersistentStateStore:
 
 class _Repository(Generic[T]):
     """Base repository backed by one store section."""
-
+    
     section: str
-
+    
     def __init__(self, store: PersistentStateStore) -> None:
         self.store = store
         self.items: dict[RepositoryKey, T] = getattr(store, self.section)
-
+    
     async def get_by_id(self, item_id: RepositoryKey) -> T | None:
         return self.items.get(item_id)
-
+    
     async def add(self, item: T) -> T:
         self.items[self._item_key(item)] = item
         self.store.save()
@@ -342,6 +345,44 @@ class PersistentPremiumBattlePassProgressRepository(_Repository[BattlePassProgre
         self.items[(item.player_id, item.season_id)] = item
         self.store.save()
         return item
+
+
+class PersistentQuestRepository:
+    """Quest definitions and per-player cooldown progress."""
+    
+    def __init__(self, store: PersistentStateStore) -> None:
+        self.store = store
+        self.items: dict[int, QuestDefinition] = store.quest_definitions
+        self.progress_items: dict[tuple[int, int], QuestProgress] = (
+            store.quest_progress
+        )
+
+    async def get_definition_by_id(self, quest_id: int) -> QuestDefinition | None:
+        return self.items.get(quest_id)
+
+    async def list_active_definitions(self) -> list[QuestDefinition]:
+        return [
+            definition for definition in self.items.values() if definition.is_active
+        ]
+
+    async def get_progress(
+        self,
+        player_id: int,
+        quest_id: int,
+    ) -> QuestProgress | None:
+        return self.progress_items.get((player_id, quest_id))
+
+    async def save_definition(self, definition: QuestDefinition) -> None:
+        self.items[definition.id] = definition
+        self.store.save()
+
+    async def save_progress(self, progress: QuestProgress) -> None:
+        self.progress_items[(progress.player_id, progress.quest_id)] = progress
+        self.store.save()
+
+    async def delete_progress(self, progress_key: tuple[int, int]) -> None:
+        self.progress_items.pop(progress_key, None)
+        self.store.save()
 
 
 class PersistentBattleRepository(_Repository[Battle]):

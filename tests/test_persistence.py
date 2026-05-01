@@ -1,5 +1,6 @@
 """Persistence tests for the database-backed runtime."""
 
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import pytest
@@ -9,10 +10,12 @@ from src.cards.domain.entities import PlayerCard
 from src.infrastructure.sqlalchemy.migrations import upgrade_head
 from src.infrastructure.sqlalchemy.repositories import create_sync_engine
 from src.infrastructure.sqlalchemy.urls import sync_database_url
+from src.quests.domain.entities import QuestReward
 from src.shared.enums import (
     CardClass,
     CardForm,
     IdeaStatus,
+    QuestActionType,
     Rarity,
     ResourceType,
     Universe,
@@ -257,6 +260,58 @@ async def test_database_services_persist_battle_results(tmp_path: Path) -> None:
     assert player_two.wins == 0
     assert player_two.losses == 1
     assert player_two.draws == 0
+
+    await reloaded.shutdown()
+
+
+@pytest.mark.asyncio
+async def test_database_services_persist_quest_cooldowns(tmp_path: Path) -> None:
+    """Quest cooldowns should survive a database-backed service restart."""
+
+    catalog_path = tmp_path / "catalog.json"
+    database_url = _sqlite_url(tmp_path / "quests.db")
+    upgrade_head(database_url)
+    started_at = datetime(2026, 5, 1, 10, tzinfo=timezone.utc)
+    reward = QuestReward(coins=10)
+
+    services = TelegramServices(catalog_path, database_url=database_url)
+    first = await services.complete_action_quest(
+        player_id=1,
+        quest_id=500,
+        action_type=QuestActionType.SHOP_PURCHASE,
+        reward=reward,
+        cooldown=timedelta(hours=1),
+        now=started_at,
+    )
+    await services.shutdown()
+
+    reloaded = TelegramServices(catalog_path, database_url=database_url)
+    blocked = await reloaded.complete_action_quest(
+        player_id=1,
+        quest_id=500,
+        action_type=QuestActionType.SHOP_PURCHASE,
+        reward=reward,
+        cooldown=timedelta(hours=1),
+        now=started_at + timedelta(minutes=30),
+    )
+    second = await reloaded.complete_action_quest(
+        player_id=1,
+        quest_id=500,
+        action_type=QuestActionType.SHOP_PURCHASE,
+        reward=reward,
+        cooldown=timedelta(hours=1),
+        now=started_at + timedelta(hours=1),
+    )
+    player = await reloaded.get_player(1)
+    progress = await reloaded.quests.get_progress(1, 500)
+
+    assert first.completed
+    assert blocked.completed is False
+    assert second.completed
+    assert player is not None
+    assert player.wallet.coins == 20
+    assert progress is not None
+    assert progress.completed_count == 2
 
     await reloaded.shutdown()
 

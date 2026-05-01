@@ -5,8 +5,6 @@ the mixins editor-friendly without importing the concrete service container and
 creating a circular dependency.
 """
 
-from __future__ import annotations
-
 import asyncio
 from collections.abc import Awaitable, MutableMapping
 from datetime import datetime
@@ -26,6 +24,8 @@ from src.clans.domain.services import ClanService
 from src.ideas.domain.entities import Idea
 from src.ideas.domain.services import IdeaService
 from src.players.domain.entities import Player, ProfileBackgroundTemplate
+from src.quests.domain.entities import QuestDefinition, QuestProgress
+from src.quests.domain.services import QuestService
 from src.shared.enums import Rarity, ResourceType
 from src.shared.value_objects.deck_slots import DeckSlots
 from src.shop.domain.entities import ShopItem
@@ -216,6 +216,24 @@ class BattlePassProgressRepositoryLike(Protocol):
     async def delete(self, progress_key: tuple[int, int]) -> None: ...
 
 
+class QuestRepositoryLike(Protocol):
+    """Quest repository surface used by Telegram services."""
+
+    items: MutableMapping[int, QuestDefinition]
+    progress_items: MutableMapping[tuple[int, int], QuestProgress]
+
+    async def get_definition_by_id(self, quest_id: int) -> QuestDefinition | None: ...
+    async def list_active_definitions(self) -> list[QuestDefinition]: ...
+    async def get_progress(
+        self,
+        player_id: int,
+        quest_id: int,
+    ) -> QuestProgress | None: ...
+    async def save_definition(self, definition: QuestDefinition) -> None: ...
+    async def save_progress(self, progress: QuestProgress) -> None: ...
+    async def delete_progress(self, progress_key: tuple[int, int]) -> None: ...
+
+
 class TelegramServiceContext(Protocol):
     """Complete service surface available to every service mixin."""
 
@@ -234,6 +252,8 @@ class TelegramServiceContext(Protocol):
     premium_battle_pass_seasons: BattlePassSeasonRepositoryLike
     battle_pass_progress: BattlePassProgressRepositoryLike
     premium_battle_pass_progress: BattlePassProgressRepositoryLike
+    quests: QuestRepositoryLike
+    quest_service: QuestService
     card_progression: CardProgressionService
     clan_service: ClanService
     idea_service: IdeaService
@@ -310,6 +330,7 @@ __all__ = [
     "PlayerCardRepositoryLike",
     "PlayerRepositoryLike",
     "ProfileBackgroundRepositoryLike",
+    "QuestRepositoryLike",
     "SaveableStore",
     "ShopRepositoryLike",
     "TelegramServiceContext",

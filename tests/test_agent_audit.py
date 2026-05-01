@@ -53,6 +53,7 @@ def test_build_summary_includes_expected_entrypoints() -> None:
         "src/telegram/services/players.py",
         "src/telegram/services/social.py",
         "src/telegram/services/content.py",
+        "src/telegram/services/quests.py",
         "src/telegram/services/support.py",
     ]
     assert summary["recommended_start_points"]["battle_orchestration"] == (
@@ -66,6 +67,9 @@ def test_build_summary_includes_expected_entrypoints() -> None:
     )
     assert summary["recommended_start_points"]["content_admin_orchestration"] == (
         "src/telegram/services/content.py"
+    )
+    assert summary["recommended_start_points"]["quest_orchestration"] == (
+        "src/telegram/services/quests.py"
     )
     assert summary["public_surfaces"]["router"]["implementation"] == (
         "src/telegram/router/router.py"

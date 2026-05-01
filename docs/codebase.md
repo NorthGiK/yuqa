@@ -56,33 +56,35 @@ matching directory when behavior changes.
    Owns clan and idea flows.
 11. `src/telegram/services/content.py`
    Owns cards, banners, shop items, starter cards, and admin content flows.
-12. `src/telegram/router/__init__.py`
+12. `src/telegram/services/quests.py`
+   Owns cooldown-aware quest completion for player actions.
+13. `src/telegram/router/__init__.py`
    Stable router import surface.
-13. `src/telegram/router/router.py`
+14. `src/telegram/router/router.py`
    Thin compatibility builder that assembles the router from public/admin
    registration modules.
-14. `src/telegram/router/public.py`
+15. `src/telegram/router/public.py`
    Registers public commands, callbacks, and player-facing wizard entry points.
-15. `src/telegram/router/admin.py`
+16. `src/telegram/router/admin.py`
    Registers admin commands, callbacks, and admin-only state handlers.
-16. `src/telegram/router/wizards_players.py`
+17. `src/telegram/router/wizards_players.py`
    Owns clan, idea, profile, and admin-player wizard steps.
-17. `src/telegram/router/wizards_progression.py`
+18. `src/telegram/router/wizards_progression.py`
    Owns battle pass and free-reward wizard steps.
-18. `src/telegram/router/wizards_content.py`
+19. `src/telegram/router/wizards_content.py`
    Thin compatibility facade for content-admin wizard families.
-19. `src/telegram/router/wizards_cards.py`
+20. `src/telegram/router/wizards_cards.py`
    Owns universe, card, profile-background, and starter-card wizard steps.
-20. `src/telegram/router/wizards_banners.py`
+21. `src/telegram/router/wizards_banners.py`
    Owns banner creation and banner-reward wizard steps.
-21. `src/telegram/router/wizards_shop.py`
+22. `src/telegram/router/wizards_shop.py`
    Owns shop item wizard steps.
-22. `src/telegram/router/battle.py`
+23. `src/telegram/router/battle.py`
    Owns battle queue entry and start helpers shared by public callbacks.
-23. `src/telegram/router/views.py`
+24. `src/telegram/router/views.py`
    Renders reusable screens such as profile, collection, battle, admin
    sections, and gallery pages.
-24. `src/telegram/router/helpers.py`
+25. `src/telegram/router/helpers.py`
    Holds pure parsing and pagination helpers shared by router flows.
 
 ## Package Map
@@ -127,7 +129,7 @@ Current feature packages:
 - `ui/`: package root plus family-specific markup modules
 
 ### `src/infrastructure/`
-- `local.py`: JSON-backed catalog/runtime persistence
+- `local.py`: JSON-backed catalog persistence and shared serializers
 - `sqlalchemy/`: SQLAlchemy models, repositories, serialization, migrations,
   and health checks
 
@@ -150,6 +152,7 @@ The bot can run in three modes:
 - Default `DATABASE_URL` falls back to SQLite inside `YUQA_DATA_DIR`
 - Active battles and matchmaking queues are cleared on startup; deck drafts and
   finished player progress persist.
+- Quest definitions and per-player quest cooldowns persist with runtime state.
 
 ## Where Logic Should Live
 
@@ -191,6 +194,8 @@ The bot can run in three modes:
   Player profile, free reward, and deck orchestration.
 - `src/telegram/services/content.py`
   Card, banner, shop, and starter-card orchestration.
+- `src/telegram/services/quests.py`
+  Cooldown-aware quest completion orchestration.
 - `src/telegram/router/public.py`
   Public command and callback registration.
 - `src/telegram/router/admin.py`
@@ -260,3 +265,9 @@ feature-level services when the change is cohesive enough.
 1. `src/<feature>/domain/entities.py`
 2. `src/<feature>/domain/services.py`
 3. The matching test file under `tests/`
+
+### If you are wiring a quest action
+1. `src/quests/domain/entities.py`
+2. `src/quests/domain/services.py`
+3. `src/telegram/services/quests.py`
+4. The router that owns the player action

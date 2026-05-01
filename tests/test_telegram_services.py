@@ -7,6 +7,7 @@ import pytest
 
 from src.cards.domain.entities import Ability, AbilityEffect, CardTemplate, PlayerCard
 from src.battle_pass.domain.entities import BattlePassProgress
+from src.quests.domain.entities import QuestProgress
 from src.shared.enums import ProfileBackgroundRarity
 from src.shared.enums import (
     AbilityStat,
@@ -132,6 +133,7 @@ async def test_admin_player_delete_flow_removes_related_state() -> None:
     services.battle_pass_progress.items[(1, 1)] = BattlePassProgress(
         player_id=1, season_id=1
     )
+    services.quests.progress_items[(1, 10)] = QuestProgress(player_id=1, quest_id=10)
 
     await start_admin_player_delete(Message(from_user=admin, text="/admin"), state)
     assert state.state is not None
@@ -150,6 +152,7 @@ async def test_admin_player_delete_flow_removes_related_state() -> None:
     assert services.deck_drafts == {}
     assert services.action_events == []
     assert services.battle_pass_progress.items == {}
+    assert services.quests.progress_items == {}
 
 
 @pytest.mark.asyncio

@@ -1,5 +1,9 @@
 """Public command, callback, and wizard handler registration."""
 
+from datetime import timedelta
+
+from src.shared.enums import QuestActionType, QuestPeriod
+from src.quests.domain.entities import QuestReward
 from src.shared.errors import (
     BattleRuleViolationError,
     DomainError,
@@ -31,6 +35,8 @@ from src.telegram.compat import (
     Message,
     Router,
 )
+from src.telegram.config import Settings
+from src.telegram.services.services import TelegramServices
 from src.telegram.reply import (
     send_alert,
     send_media_preview,
@@ -97,16 +103,24 @@ from src.telegram.router.wizards_players import (
 )
 
 
-def register_public_handlers(router: Router, services, settings) -> None:
+def register_public_handlers(
+    router: Router,
+    services: TelegramServices,
+    settings: Settings,
+) -> None:
     """Register non-admin commands, callbacks, and state handlers."""
 
     _register_public_commands(router, services, settings)
     _register_public_callbacks(router, services, settings)
 
 
-def _register_public_commands(router: Router, services, settings) -> None:
+def _register_public_commands(
+    router: Router,
+    services: TelegramServices,
+    settings: Settings,
+) -> None:
     """Register public command and menu handlers."""
-
+    
     @router.message(CommandStart())
     async def start(message: Message):
         if message.from_user:
@@ -116,7 +130,7 @@ def _register_public_commands(router: Router, services, settings) -> None:
                 message.from_user.id,
                 is_admin=message.from_user.id in settings.admin_ids,
             )
-
+    
     @router.message(Command("menu"))
     async def open_menu(message: Message):
         if message.from_user:

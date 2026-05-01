@@ -34,6 +34,7 @@
 - `src/telegram/services/players.py` owns player lookup, profiles, free rewards, and deck construction.
 - `src/telegram/services/social.py` owns clans and ideas.
 - `src/telegram/services/content.py` owns cards, banners, shop items, starter cards, and content-admin flows.
+- `src/telegram/services/quests.py` owns cooldown-aware quest completion for player actions.
 - `src/telegram/services/support.py` holds small shared service helpers.
 - `src/telegram/router/router.py` assembles the router from the public/admin handler modules.
 - `src/telegram/router/public.py` owns public command and callback registration.
@@ -64,6 +65,8 @@
   JSON-backed catalog content with temporary SQLite-backed runtime state.
 - `TelegramServices(content_path=..., database_url=...)`:
   persistent database-backed runtime with Alembic migrations.
+- Quest definitions and per-player quest cooldowns are part of persisted runtime
+  state.
 
 ## Task Playbooks
 
@@ -77,11 +80,12 @@ Open these files in order:
 6. `src/telegram/services/battle_pass.py`
 7. `src/telegram/services/players.py`
 8. `src/telegram/services/content.py`
-9. `src/telegram/router/__init__.py`
-10. `src/telegram/router/router.py`
-11. `src/telegram/router/public.py`
-12. `src/telegram/router/admin.py`
-13. `src/telegram/router/views.py`
+9. `src/telegram/services/quests.py`
+10. `src/telegram/router/__init__.py`
+11. `src/telegram/router/router.py`
+12. `src/telegram/router/public.py`
+13. `src/telegram/router/admin.py`
+14. `src/telegram/router/views.py`
 
 ### New Domain Rule
 Open:
@@ -117,6 +121,14 @@ Open:
 3. `src/infrastructure/local.py`
 4. `tests/test_persistence.py`
 
+### Quest Action Completion
+Open:
+1. `src/quests/domain/entities.py`
+2. `src/quests/domain/services.py`
+3. `src/telegram/services/quests.py`
+4. The router that performs the action
+5. `tests/test_quests_battlepass.py`
+
 ## Hotspots
 - `src/telegram/services/services.py`
 - `src/telegram/services/contracts.py`
@@ -124,6 +136,7 @@ Open:
 - `src/telegram/services/battle_pass.py`
 - `src/telegram/services/players.py`
 - `src/telegram/services/content.py`
+- `src/telegram/services/quests.py`
 - `src/telegram/router/public.py`
 - `src/telegram/router/admin.py`
 - `src/telegram/router/wizards_cards.py`

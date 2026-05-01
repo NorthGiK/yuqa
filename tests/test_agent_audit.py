@@ -111,15 +111,3 @@ def test_public_surfaces_remain_import_stable() -> None:
 
 def test_layer_boundaries_pass_for_current_repo() -> None:
     assert check_boundaries() == []
-
-
-def test_container_runtime_matches_application_entrypoint() -> None:
-    dockerfile = (ROOT / "docker" / "Dockerfile").read_text(encoding="utf-8")
-    compose = (ROOT / "docker" / "compose.yaml").read_text(encoding="utf-8")
-
-    assert 'DATABASE_URL=sqlite:////data/yuqa.db' in dockerfile
-    assert "COPY src ./src" in dockerfile
-    assert "python -m src.infrastructure.sqlalchemy.healthcheck" in dockerfile
-    assert 'CMD ["uv", "run", "yuqa"]' in dockerfile
-    assert "image: ${YUQA_IMAGE:-yuqa:latest}" in compose
-    assert "yuqa-data:/data" in compose

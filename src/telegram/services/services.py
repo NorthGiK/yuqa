@@ -4,6 +4,7 @@ import asyncio
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from random import Random
+from tempfile import TemporaryDirectory
 
 from src.banners.domain.services import BannerRollService
 from src.battle_pass.domain.entities import BattlePassLevel, BattlePassSeason
@@ -20,21 +21,6 @@ from src.infrastructure.local import (
     LocalPremiumBattlePassSeasonRepository,
     LocalProfileBackgroundRepository,
     LocalShopRepository,
-)
-from src.infrastructure.memory import (
-    InMemoryBannerRepository,
-    InMemoryBattlePassProgressRepository,
-    InMemoryBattlePassSeasonRepository,
-    InMemoryBattleRepository,
-    InMemoryCardTemplateRepository,
-    InMemoryClanRepository,
-    InMemoryIdeaRepository,
-    InMemoryPlayerCardRepository,
-    InMemoryPlayerRepository,
-    InMemoryPremiumBattlePassProgressRepository,
-    InMemoryPremiumBattlePassSeasonRepository,
-    InMemoryProfileBackgroundRepository,
-    InMemoryShopRepository,
 )
 from src.infrastructure.sqlalchemy.repositories import (
     PersistentBannerRepository,
@@ -103,6 +89,12 @@ _DEFAULT_FREE_RESOURCE_VALUES = {
 _MAX_ACTION_EVENTS = 1_000
 
 
+def _sqlite_url(path: Path) -> str:
+    """Build a SQLite URL from a local filesystem path."""
+
+    return f"sqlite:///{path.expanduser().resolve().as_posix()}"
+
+
 class TelegramServices(
     BattleServiceMixin,
     BattlePassServiceMixin,
@@ -153,43 +145,35 @@ class TelegramServices(
         *,
         database_url: str | None = None,
     ) -> None:
-        self.store = (
-            PersistentStateStore(database_url, content_path) if database_url else None
+        self._temporary_store_dir: TemporaryDirectory[str] | None = None
+        content_file = Path(content_path) if content_path is not None else None
+        runtime_database_url = database_url
+        if runtime_database_url is None:
+            self._temporary_store_dir = TemporaryDirectory(prefix="yuqa-services-")
+            runtime_database_url = _sqlite_url(
+                Path(self._temporary_store_dir.name) / "yuqa.db"
+            )
+
+        self.store = PersistentStateStore(
+            runtime_database_url,
+            content_file if database_url is not None else None,
         )
         self.catalog = (
             self.store
-            if self.store is not None
-            else CatalogStore(Path(content_path))
-            if content_path
-            else None
+            if content_file is None or database_url is not None
+            else CatalogStore(content_file)
         )
-        self.players = (
-            PersistentPlayerRepository(self.store)
-            if self.store is not None
-            else InMemoryPlayerRepository()
-        )
-        self.player_cards = (
-            PersistentPlayerCardRepository(self.store)
-            if self.store is not None
-            else InMemoryPlayerCardRepository()
-        )
+        content_is_database_backed = self.catalog is self.store
+
+        self.players = PersistentPlayerRepository(self.store)
+        self.player_cards = PersistentPlayerCardRepository(self.store)
         self.profile_backgrounds = (
             PersistentProfileBackgroundRepository(self.store)
-            if self.store is not None
+            if content_is_database_backed
             else LocalProfileBackgroundRepository(self.catalog)
-            if self.catalog
-            else InMemoryProfileBackgroundRepository()
         )
-        self.clans = (
-            PersistentClanRepository(self.store)
-            if self.store is not None
-            else InMemoryClanRepository()
-        )
-        self.battles = (
-            PersistentBattleRepository(self.store)
-            if self.store is not None
-            else InMemoryBattleRepository()
-        )
+        self.clans = PersistentClanRepository(self.store)
+        self.battles = PersistentBattleRepository(self.store)
         self.card_progression = CardProgressionService()
         self.clan_service = ClanService()
         self.idea_service = IdeaService()
@@ -198,37 +182,21 @@ class TelegramServices(
         self.battle_engine = BattleEngine()
         self.battle_pass_seasons = (
             PersistentBattlePassSeasonRepository(self.store)
-            if self.store is not None
+            if content_is_database_backed
             else LocalBattlePassSeasonRepository(self.catalog)
-            if self.catalog
-            else InMemoryBattlePassSeasonRepository()
         )
         self.premium_battle_pass_seasons = (
             PersistentPremiumBattlePassSeasonRepository(self.store)
-            if self.store is not None
+            if content_is_database_backed
             else LocalPremiumBattlePassSeasonRepository(self.catalog)
-            if self.catalog
-            else InMemoryPremiumBattlePassSeasonRepository()
         )
-        self.battle_pass_progress = (
-            PersistentBattlePassProgressRepository(self.store)
-            if self.store is not None
-            else InMemoryBattlePassProgressRepository()
-        )
+        self.battle_pass_progress = PersistentBattlePassProgressRepository(self.store)
         self.premium_battle_pass_progress = (
             PersistentPremiumBattlePassProgressRepository(self.store)
-            if self.store is not None
-            else InMemoryPremiumBattlePassProgressRepository()
         )
-        self.search_queue: dict[int, int] = (
-            self.store.search_queue if self.store is not None else {}
-        )
-        self.deck_drafts: dict[int, list[int]] = (
-            self.store.deck_drafts if self.store is not None else {}
-        )
-        self.action_events: list[tuple[int, str]] = (
-            self.store.action_events if self.store is not None else []
-        )
+        self.search_queue: dict[int, int] = self.store.search_queue
+        self.deck_drafts: dict[int, list[int]] = self.store.deck_drafts
+        self.action_events: list[tuple[int, str]] = self.store.action_events
         self.battle_action_drafts: dict[tuple[int, int, int], list[BattleAction]] = {}
         self.battle_bonus_carryover: dict[tuple[int, int], int] = {}
         self.battle_current_turn_player_ids: dict[int, int] = {}
@@ -243,27 +211,16 @@ class TelegramServices(
         self.rng = Random()
         self.ideas = (
             PersistentIdeaRepository(self.store)
-            if self.store is not None
+            if content_is_database_backed
             else LocalIdeaRepository(self.catalog)
-                if self.catalog
-                else InMemoryIdeaRepository()
         )
         self._clear_all_battles()
         self._universes = []
         self._standard_cards = []
-        if self.store is not None:
+        if content_is_database_backed:
             self.card_templates = PersistentCardTemplateRepository(self.store)
             self.banners = PersistentBannerRepository(self.store)
             self.shop = PersistentShopRepository(self.store)
-        elif self.catalog is None:
-            self.card_templates = InMemoryCardTemplateRepository()
-            self.banners = InMemoryBannerRepository()
-            self.shop = InMemoryShopRepository()
-            self._universes = [
-                item.value
-                for item in Universe
-                if item.value not in {"unknown", "other"}
-            ]
         else:
             self.card_templates = LocalCardTemplateRepository(self.catalog)
             self.banners = LocalBannerRepository(self.catalog)
@@ -285,11 +242,10 @@ class TelegramServices(
         self._seed_premium_battle_pass()
 
     async def flush(self) -> None:
-        """Persist the current in-memory state when durable storage is active."""
+        """Persist the current runtime and catalog state."""
 
-        if self.store is not None:
-            self.store.save()
-        elif self.catalog is not None and hasattr(self.catalog, "save"):
+        self.store.save()
+        if self.catalog is not self.store and hasattr(self.catalog, "save"):
             self.catalog.save()
 
     async def shutdown(self) -> None:
@@ -297,8 +253,9 @@ class TelegramServices(
 
         self._clear_all_battles()
         await self.flush()
-        if self.store is not None:
-            self.store.close()
+        self.store.close()
+        if self._temporary_store_dir is not None:
+            self._temporary_store_dir.cleanup()
 
     def configure_battle_timeout_notifier(
         self,
@@ -365,8 +322,7 @@ class TelegramServices(
         )
         if not self.battle_pass_seasons.items:
             self.battle_pass_seasons.items[1] = season
-            if self.store is not None:
-                self.store.save()
+            self.store.save()
 
     def _seed_premium_battle_pass(self) -> None:
         """Create a default active premium battle pass season."""
@@ -385,11 +341,9 @@ class TelegramServices(
         )
         if not self.premium_battle_pass_seasons.items:
             self.premium_battle_pass_seasons.items[1] = season
-            if self.store is not None:
-                self.store.save()
+            self.store.save()
 
     def _persist_runtime_state(self) -> None:
-        """Flush transient runtime state when durable storage is enabled."""
+        """Flush runtime state to the backing store."""
 
-        if self.store is not None:
-            self.store.save()
+        self.store.save()

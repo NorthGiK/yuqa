@@ -65,6 +65,7 @@ class PersistentStateStore:
     ) -> None:
         self.database_url = database_url
         self.engine = create_sync_engine(database_url)
+        StateDocumentORM.metadata.create_all(self.engine)
 
         self.players: dict[int, Player] = {}
         self.player_cards: dict[int, PlayerCard] = {}
@@ -97,7 +98,7 @@ class PersistentStateStore:
             ]
 
     def load(self) -> None:
-        """Load every document from the database into memory."""
+        """Load every document from the database into store dictionaries."""
 
         with Session(self.engine) as session:
             documents = {
@@ -109,7 +110,7 @@ class PersistentStateStore:
             setattr(self, section, codec.load(documents.get(section)))
 
     def save(self) -> None:
-        """Persist every in-memory section into the database."""
+        """Persist every loaded section into the database."""
 
         with Session(self.engine) as session:
             for section, codec in SECTION_CODECS.items():

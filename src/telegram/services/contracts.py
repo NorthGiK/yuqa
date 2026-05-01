@@ -57,7 +57,7 @@ class BattleTimeoutNotifier(Protocol):
 
 
 class SaveableStore(Protocol):
-    """Storage object that can persist its current in-memory state."""
+    """Storage object that can persist its current state."""
 
     def save(self) -> None: ...
 

@@ -353,7 +353,6 @@ def _module_groups() -> dict[str, list[str]]:
         "telegram_services": TELEGRAM_SERVICES_GROUP,
         "storage": [
             "src/infrastructure/local.py",
-            "src/infrastructure/memory.py",
             "src/infrastructure/sqlalchemy/repositories.py",
             "src/infrastructure/sqlalchemy/models.py",
         ],
@@ -456,7 +455,7 @@ def build_summary() -> dict[str, object]:
         "layers": {
             "domain": "Pure game rules and entities. No Telegram or persistence imports.",
             "telegram": "Bot transport, handlers, texts, UI, callbacks, and config.",
-            "infrastructure": "Persistence adapters for in-memory, local catalog, and SQLAlchemy.",
+            "infrastructure": "Persistence adapters for local catalog and SQLAlchemy.",
             "shared": "Enums, IDs, errors, and reusable value objects.",
         },
         "public_surfaces": {
@@ -493,14 +492,14 @@ def build_summary() -> dict[str, object]:
         ],
         "storage_modes": [
             {
-                "mode": "memory",
+                "mode": "temporary_sqlite",
                 "trigger": "TelegramServices()",
-                "notes": "Fastest for tests and isolated service experiments.",
+                "notes": "Uses an isolated temporary SQLite document store.",
             },
             {
                 "mode": "catalog",
                 "trigger": "TelegramServices(content_path=Path(...))",
-                "notes": "Loads and persists JSON-backed content without SQLAlchemy.",
+                "notes": "Loads JSON-backed content and uses temporary SQLite for runtime state.",
             },
             {
                 "mode": "database",

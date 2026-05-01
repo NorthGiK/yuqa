@@ -127,7 +127,6 @@ Current feature packages:
 - `ui/`: package root plus family-specific markup modules
 
 ### `src/infrastructure/`
-- `memory.py`: in-memory repositories for tests and fast local flows
 - `local.py`: JSON-backed catalog/runtime persistence
 - `sqlalchemy/`: SQLAlchemy models, repositories, serialization, migrations,
   and health checks
@@ -135,13 +134,15 @@ Current feature packages:
 ## Storage Model
 The bot can run in three modes:
 
-### Memory
+### Temporary SQLite
 - Constructed with `TelegramServices()`
-- Best for tests and isolated service experiments
+- Uses an isolated SQLite document store for tests and isolated service
+  experiments
 
 ### Catalog / Local JSON
 - Constructed with `TelegramServices(content_path=...)`
-- Uses JSON-backed repositories for catalog-like content
+- Uses JSON-backed repositories for catalog-like content and temporary SQLite
+  for runtime state
 
 ### Database
 - Constructed with `TelegramServices(content_path=..., database_url=...)`

@@ -59,9 +59,9 @@
 
 ## Storage Modes
 - `TelegramServices()`:
-  fastest path for tests and isolated logic work.
+  isolated temporary SQLite-backed runtime for tests and isolated logic work.
 - `TelegramServices(content_path=...)`:
-  JSON-backed catalog/runtime storage without SQLAlchemy.
+  JSON-backed catalog content with temporary SQLite-backed runtime state.
 - `TelegramServices(content_path=..., database_url=...)`:
   persistent database-backed runtime with Alembic migrations.
 

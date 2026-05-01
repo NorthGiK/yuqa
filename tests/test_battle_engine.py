@@ -2,17 +2,17 @@
 
 import pytest
 
-from yuqa.battles.domain.actions import (
+from src.battles.domain.actions import (
     AttackAction,
     BlockAction,
     BonusAction,
     SwitchCardAction,
     UseAbilityAction,
 )
-from yuqa.battles.domain.engine import BattleEngine
-from yuqa.battles.domain.entities import Battle, BattleCardState, BattleSide
-from yuqa.cards.domain.entities import Ability, AbilityEffect, CardTemplate
-from yuqa.shared.enums import (
+from src.battles.domain.engine import BattleEngine
+from src.battles.domain.entities import Battle, BattleCardState, BattleSide
+from src.cards.domain.entities import Ability, AbilityEffect, CardTemplate
+from src.shared.enums import (
     AbilityStat,
     AbilityTarget,
     BattleActionType,
@@ -22,9 +22,9 @@ from yuqa.shared.enums import (
     Rarity,
     Universe,
 )
-from yuqa.shared.value_objects.image_ref import ImageRef
-from yuqa.shared.value_objects.stat_block import StatBlock
-from yuqa.shared.errors import BattleRuleViolationError
+from src.shared.value_objects.image_ref import ImageRef
+from src.shared.value_objects.stat_block import StatBlock
+from src.shared.errors import BattleRuleViolationError
 
 
 def make_template():

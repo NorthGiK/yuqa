@@ -5,10 +5,10 @@ from datetime import datetime, timedelta, timezone
 
 import pytest
 
-from yuqa.cards.domain.entities import Ability, AbilityEffect, CardTemplate, PlayerCard
-from yuqa.battle_pass.domain.entities import BattlePassProgress
-from yuqa.shared.enums import ProfileBackgroundRarity
-from yuqa.shared.enums import (
+from src.cards.domain.entities import Ability, AbilityEffect, CardTemplate, PlayerCard
+from src.battle_pass.domain.entities import BattlePassProgress
+from src.shared.enums import ProfileBackgroundRarity
+from src.shared.enums import (
     AbilityStat,
     AbilityTarget,
     BannerType,
@@ -20,19 +20,19 @@ from yuqa.shared.enums import (
     ResourceType,
     Universe,
 )
-from yuqa.shared.errors import (
+from src.shared.errors import (
     BattleRuleViolationError,
     EntityNotFoundError,
     ForbiddenActionError,
     ValidationError,
 )
-from yuqa.shared.value_objects.date_range import DateRange
-from yuqa.shared.value_objects.deck_slots import DeckSlots
-from yuqa.shared.value_objects.image_ref import ImageRef
-from yuqa.shared.value_objects.resource_wallet import ResourceWallet
-from yuqa.shared.value_objects.stat_block import StatBlock
-from yuqa.telegram.compat import CommandObject, FSMContext, Message, User
-from yuqa.telegram.router import (
+from src.shared.value_objects.date_range import DateRange
+from src.shared.value_objects.deck_slots import DeckSlots
+from src.shared.value_objects.image_ref import ImageRef
+from src.shared.value_objects.resource_wallet import ResourceWallet
+from src.shared.value_objects.stat_block import StatBlock
+from src.telegram.compat import CommandObject, FSMContext, Message, User
+from src.telegram.router import (
     capture_admin_player_id,
     capture_admin_player_value,
     capture_battle_pass_level_number,
@@ -51,8 +51,8 @@ from yuqa.telegram.router import (
     start_universe_create,
     start_universe_delete,
 )
-from yuqa.telegram.services.services import TelegramServices
-from yuqa.telegram.texts.texts import battle_started_text
+from src.telegram.services.services import TelegramServices
+from src.telegram.texts.texts import battle_started_text
 
 
 @pytest.fixture()
@@ -1412,7 +1412,7 @@ async def test_battle_pass_progress_is_visible() -> None:
 
     season = await services.active_battle_pass()
     assert season is not None
-    from yuqa.telegram.texts.texts import battle_pass_text
+    from src.telegram.texts.texts import battle_pass_text
 
     text = battle_pass_text(season, player)
 

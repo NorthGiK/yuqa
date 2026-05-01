@@ -5,10 +5,10 @@ from types import SimpleNamespace
 
 import pytest
 
-from yuqa.banners.domain.entities import Banner
-from yuqa.cards.domain.entities import Ability, AbilityEffect, PlayerCard
-from yuqa.quests.domain.entities import QuestReward
-from yuqa.shared.enums import (
+from src.banners.domain.entities import Banner
+from src.cards.domain.entities import Ability, AbilityEffect, PlayerCard
+from src.quests.domain.entities import QuestReward
+from src.shared.enums import (
     AbilityStat,
     AbilityTarget,
     BannerType,
@@ -19,15 +19,15 @@ from yuqa.shared.enums import (
     Rarity,
     Universe,
 )
-from yuqa.shared.errors import ForbiddenActionError
-from yuqa.shared.value_objects.date_range import DateRange
-from yuqa.shared.value_objects.deck_slots import DeckSlots
-from yuqa.shared.value_objects.resource_wallet import ResourceWallet
-from yuqa.shared.value_objects.stat_block import StatBlock
-from yuqa.telegram.callbacks import AdminCallback
-from yuqa.telegram.compat import CallbackQuery, FSMContext, Message, User
-from yuqa.telegram.config import Settings
-from yuqa.telegram.router import (
+from src.shared.errors import ForbiddenActionError
+from src.shared.value_objects.date_range import DateRange
+from src.shared.value_objects.deck_slots import DeckSlots
+from src.shared.value_objects.resource_wallet import ResourceWallet
+from src.shared.value_objects.stat_block import StatBlock
+from src.telegram.callbacks import AdminCallback
+from src.telegram.compat import CallbackQuery, FSMContext, Message, User
+from src.telegram.config import Settings
+from src.telegram.router import (
     build_router,
     capture_admin_player_card_player_id,
     capture_admin_player_card_template_id,
@@ -47,8 +47,8 @@ from yuqa.telegram.router import (
     start_clan_creation,
     start_free_rewards_edit,
 )
-from yuqa.telegram.states import AdminPlayerCardEdit, CardCreate
-from yuqa.telegram.services.services import TelegramServices
+from src.telegram.states import AdminPlayerCardEdit, CardCreate
+from src.telegram.services.services import TelegramServices
 
 
 @pytest.mark.asyncio

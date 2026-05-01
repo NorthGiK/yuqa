@@ -2,12 +2,12 @@
 
 import pytest
 
-from yuqa.players.domain.entities import Player
-from yuqa.shop.domain.entities import ShopItem
-from yuqa.shop.domain.services import ShopService
-from yuqa.shared.enums import ResourceType
-from yuqa.shared.errors import NotEnoughResourcesError, ValidationError
-from yuqa.shared.value_objects.resource_wallet import ResourceWallet
+from src.players.domain.entities import Player
+from src.shop.domain.entities import ShopItem
+from src.shop.domain.services import ShopService
+from src.shared.enums import ResourceType
+from src.shared.errors import NotEnoughResourcesError, ValidationError
+from src.shared.value_objects.resource_wallet import ResourceWallet
 
 
 def test_shop_purchase():

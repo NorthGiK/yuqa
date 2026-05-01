@@ -4,7 +4,7 @@ from pathlib import Path
 
 import pytest
 
-from yuqa.telegram.config import Settings
+from src.telegram.config import Settings
 
 
 def test_settings_from_env_reads_values(

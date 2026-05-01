@@ -21,20 +21,31 @@ with `DATABASE_URL` to use PostgreSQL or another SQLAlchemy-supported database.
 The Telegram layer is split into package directories rather than one large flat
 module set:
 
-- `yuqa/telegram/router/` for handler registration, wizard steps, and reusable views
-- `yuqa/telegram/services/` for storage selection, typed mixin contracts, and
+- `src/telegram/router/` for handler registration, wizard steps, and reusable views
+- `src/telegram/services/` for storage selection, typed mixin contracts, and
   orchestration mixins
-- `yuqa/telegram/texts/` for copy and text-formatting helpers
-- `yuqa/telegram/ui/` for keyboards and inline markup
+- `src/telegram/texts/` for copy and text-formatting helpers
+- `src/telegram/ui/` for keyboards and inline markup
 
 Import from the stable package roots:
 
-- `yuqa.telegram.router`
-- `yuqa.telegram.services`
-- `yuqa.telegram.texts`
-- `yuqa.telegram.ui`
+- `src.telegram.router`
+- `src.telegram.services`
+- `src.telegram.texts`
+- `src.telegram.ui`
 
 Edit the implementation modules inside those directories when behavior changes.
+
+## Typing conventions
+
+- Repository adapters should expose concrete return types for their async
+  methods, even when they share a small generic base class.
+- Telegram service mixins use protocol contracts from
+  `src/telegram/services/contracts.py`; update those contracts when a mixin
+  starts depending on a new repository or service attribute.
+- Add comments only around non-obvious runtime decisions, such as persistence
+  pragmas or bootstrap side effects. Prefer type hints and clear names for
+  ordinary control flow.
 
 ## AI-agent workflow
 
@@ -66,11 +77,11 @@ make agent-check
 ## Docker deployment
 
 ```bash
-docker build -t yuqa:latest .
-docker compose up -d
+docker build -f docker/Dockerfile -t yuqa:latest .
+docker compose -f docker/compose.yaml up -d
 ```
 
-`compose.yaml` mounts `/data` as a persistent volume. The image healthcheck
+`docker/compose.yaml` mounts `/data` as a persistent volume. The image healthcheck
 uses the same SQLite URL format as the application, and Compose restarts the
 bot automatically if it crashes.
 

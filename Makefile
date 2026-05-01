@@ -35,18 +35,11 @@ test-file:
 	make clean
 
 lint:
-	$(UV) run ruff check yuqa tests main.py
+	$(UV) run ruff check src tests main.py
 
 format:
-	$(UV) run ruff format yuqa tests main.py
+	$(UV) run ruff format src tests main.py
 
-build:
-	$(UV) run nuitka main.py
-
-# run binary file only on linux
-brun:
-	bash main.sh
-	make clean
 
 db-upgrade:
 	$(UV) run alembic upgrade head
@@ -58,6 +51,6 @@ agent-check:
 	$(UV) run python scripts/agent_audit.py check
 
 clean:
-	find yuqa tests -type d -name '__pycache__' -prune -exec rm -rf {} +
+	find src tests -type d -name '__pycache__' -prune -exec rm -rf {} +
 	rm -rf .pytest_cache
 	rm -rf .cache/uv

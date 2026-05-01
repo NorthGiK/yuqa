@@ -30,7 +30,7 @@ dev = [
 ]
 
 [project.scripts]
-yuqa = "yuqa.main:entrypoint"
+yuqa = "src.main:entrypoint"
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
@@ -38,4 +38,4 @@ testpaths = ["tests"]
 
 [tool.setuptools.packages.find]
 where = ["."]
-include = ["yuqa*"]
+include = ["src*"]

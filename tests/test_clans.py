@@ -2,11 +2,11 @@
 
 import pytest
 
-from yuqa.clans.domain.entities import Clan
-from yuqa.clans.domain.services import ClanService
-from yuqa.players.domain.entities import Player
-from yuqa.shared.errors import ForbiddenActionError
-from yuqa.shared.value_objects.resource_wallet import ResourceWallet
+from src.clans.domain.entities import Clan
+from src.clans.domain.services import ClanService
+from src.players.domain.entities import Player
+from src.shared.errors import ForbiddenActionError
+from src.shared.value_objects.resource_wallet import ResourceWallet
 
 
 def test_clan_lifecycle():

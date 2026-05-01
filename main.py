@@ -1,6 +1,6 @@
 """Run the Yuqa Telegram bot."""
 
-from yuqa.main import entrypoint
+from src.main import entrypoint
 
 
 if __name__ == "__main__":

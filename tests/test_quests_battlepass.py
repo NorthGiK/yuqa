@@ -4,17 +4,17 @@ from datetime import datetime, timedelta, timezone
 
 import pytest
 
-from yuqa.battle_pass.domain.entities import (
+from src.battle_pass.domain.entities import (
     BattlePassLevel,
     BattlePassProgress,
     BattlePassSeason,
 )
-from yuqa.battle_pass.domain.services import BattlePassService
-from yuqa.players.domain.entities import Player
-from yuqa.quests.domain.entities import QuestDefinition, QuestProgress, QuestReward
-from yuqa.quests.domain.services import QuestResetService, QuestService
-from yuqa.shared.enums import QuestActionType, QuestPeriod
-from yuqa.telegram.services.services import TelegramServices
+from src.battle_pass.domain.services import BattlePassService
+from src.players.domain.entities import Player
+from src.quests.domain.entities import QuestDefinition, QuestProgress, QuestReward
+from src.quests.domain.services import QuestResetService, QuestService
+from src.shared.enums import QuestActionType, QuestPeriod
+from src.telegram.services.services import TelegramServices
 
 
 def test_quest_completion_and_reset():

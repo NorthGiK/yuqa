@@ -2,7 +2,7 @@
 
 import pytest
 
-from yuqa.shared.enums import (
+from src.shared.enums import (
     BattleActionType,
     CardForm,
     Rarity,
@@ -10,13 +10,13 @@ from yuqa.shared.enums import (
     RewardType,
     Universe,
 )
-from yuqa.shared.errors import NotEnoughResourcesError, ValidationError
-from yuqa.shared.value_objects.deck_slots import DeckSlots
-from yuqa.shared.value_objects.date_range import DateRange
-from yuqa.shared.value_objects.image_ref import ImageRef
-from yuqa.shared.value_objects.probability import ProbabilityWeight
-from yuqa.shared.value_objects.resource_wallet import ResourceWallet
-from yuqa.shared.value_objects.stat_block import StatBlock
+from src.shared.errors import NotEnoughResourcesError, ValidationError
+from src.shared.value_objects.deck_slots import DeckSlots
+from src.shared.value_objects.date_range import DateRange
+from src.shared.value_objects.image_ref import ImageRef
+from src.shared.value_objects.probability import ProbabilityWeight
+from src.shared.value_objects.resource_wallet import ResourceWallet
+from src.shared.value_objects.stat_block import StatBlock
 
 
 def test_enums_are_strings():

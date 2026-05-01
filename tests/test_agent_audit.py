@@ -3,7 +3,7 @@
 from pathlib import Path
 
 from scripts.agent_audit import build_summary, check_boundaries
-from yuqa.telegram import router, services, texts, ui
+from src.telegram import router, services, texts, ui
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -12,69 +12,69 @@ ROOT = Path(__file__).resolve().parents[1]
 def test_build_summary_includes_expected_entrypoints() -> None:
     summary = build_summary()
 
-    assert "yuqa/main.py" in summary["entrypoints"]
-    assert "yuqa/telegram/router/__init__.py" in summary["entrypoints"]
+    assert "src/main.py" in summary["entrypoints"]
+    assert "src/telegram/router/__init__.py" in summary["entrypoints"]
     assert summary["commands"]["agent_summary"] == "make agent-summary"
     assert summary["recommended_start_points"]["telegram_views"] == (
-        "yuqa/telegram/router/router_views.py"
+        "src/telegram/router/views.py"
     )
     assert summary["runtime_flow"][0]["path"] == "main.py"
     assert summary["module_groups"]["telegram_flow"] == [
-        "yuqa/telegram/router/__init__.py",
-        "yuqa/telegram/router/router.py",
-        "yuqa/telegram/router/router_public.py",
-        "yuqa/telegram/router/router_admin.py",
-        "yuqa/telegram/states.py",
-        "yuqa/telegram/callbacks.py",
+        "src/telegram/router/__init__.py",
+        "src/telegram/router/router.py",
+        "src/telegram/router/public.py",
+        "src/telegram/router/admin.py",
+        "src/telegram/states.py",
+        "src/telegram/callbacks.py",
     ]
     assert summary["module_groups"]["telegram_views"] == [
-        "yuqa/telegram/router/router_views.py",
-        "yuqa/telegram/texts/__init__.py",
-        "yuqa/telegram/texts/texts.py",
-        "yuqa/telegram/ui/__init__.py",
-        "yuqa/telegram/ui/ui.py",
-        "yuqa/telegram/reply.py",
+        "src/telegram/router/views.py",
+        "src/telegram/texts/__init__.py",
+        "src/telegram/texts/texts.py",
+        "src/telegram/ui/__init__.py",
+        "src/telegram/ui/ui.py",
+        "src/telegram/reply.py",
     ]
     assert summary["module_groups"]["telegram_wizards"] == [
-        "yuqa/telegram/router/router_wizards_players.py",
-        "yuqa/telegram/router/router_wizards_progression.py",
-        "yuqa/telegram/router/router_wizards_content.py",
-        "yuqa/telegram/router/router_wizards_cards.py",
-        "yuqa/telegram/router/router_wizards_banners.py",
-        "yuqa/telegram/router/router_wizards_shop.py",
-        "yuqa/telegram/router/router_battle.py",
+        "src/telegram/router/wizards_players.py",
+        "src/telegram/router/wizards_progression.py",
+        "src/telegram/router/wizards_content.py",
+        "src/telegram/router/wizards_cards.py",
+        "src/telegram/router/wizards_banners.py",
+        "src/telegram/router/wizards_shop.py",
+        "src/telegram/router/battle.py",
     ]
     assert summary["module_groups"]["telegram_services"] == [
-        "yuqa/telegram/services/__init__.py",
-        "yuqa/telegram/services/services.py",
-        "yuqa/telegram/services/services_contracts.py",
-        "yuqa/telegram/services/services_battles.py",
-        "yuqa/telegram/services/services_battle_pass.py",
-        "yuqa/telegram/services/services_players.py",
-        "yuqa/telegram/services/services_social.py",
-        "yuqa/telegram/services/services_content.py",
-        "yuqa/telegram/services/services_support.py",
+        "src/telegram/services/__init__.py",
+        "src/telegram/services/services.py",
+        "src/telegram/services/contracts.py",
+        "src/telegram/services/battles.py",
+        "src/telegram/services/battle_pass.py",
+        "src/telegram/services/players.py",
+        "src/telegram/services/social.py",
+        "src/telegram/services/content.py",
+        "src/telegram/services/support.py",
     ]
     assert summary["recommended_start_points"]["battle_orchestration"] == (
-        "yuqa/telegram/services/services_battles.py"
+        "src/telegram/services/battles.py"
     )
     assert summary["recommended_start_points"]["service_contracts"] == (
-        "yuqa/telegram/services/services_contracts.py"
+        "src/telegram/services/contracts.py"
     )
     assert summary["recommended_start_points"]["telegram_admin_handlers"] == (
-        "yuqa/telegram/router/router_admin.py"
+        "src/telegram/router/admin.py"
     )
     assert summary["recommended_start_points"]["content_admin_orchestration"] == (
-        "yuqa/telegram/services/services_content.py"
+        "src/telegram/services/content.py"
     )
     assert summary["public_surfaces"]["router"]["implementation"] == (
-        "yuqa/telegram/router/router.py"
+        "src/telegram/router/router.py"
     )
     assert summary["module_groups"]["telegram_texts"][-1] == (
-        "yuqa/telegram/texts/texts_admin.py"
+        "src/telegram/texts/admin.py"
     )
     assert summary["module_groups"]["telegram_ui"][-1] == (
-        "yuqa/telegram/ui/ui_admin.py"
+        "src/telegram/ui/admin.py"
     )
 
 
@@ -86,7 +86,7 @@ def test_build_summary_reports_known_feature() -> None:
     )
 
     assert "entities.py" in cards_feature["domain_modules"]
-    assert "yuqa/cards/domain/entities.py" in cards_feature["files"]
+    assert "src/cards/domain/entities.py" in cards_feature["files"]
     assert cards_feature["test_status"] == "direct"
 
 
@@ -114,10 +114,12 @@ def test_layer_boundaries_pass_for_current_repo() -> None:
 
 
 def test_container_runtime_matches_application_entrypoint() -> None:
-    dockerfile = (ROOT / "Dockerfile").read_text(encoding="utf-8")
-    compose = (ROOT / "compose.yaml").read_text(encoding="utf-8")
+    dockerfile = (ROOT / "docker" / "Dockerfile").read_text(encoding="utf-8")
+    compose = (ROOT / "docker" / "compose.yaml").read_text(encoding="utf-8")
 
     assert 'DATABASE_URL=sqlite:////data/yuqa.db' in dockerfile
+    assert "COPY src ./src" in dockerfile
+    assert "python -m src.infrastructure.sqlalchemy.healthcheck" in dockerfile
     assert 'CMD ["uv", "run", "yuqa"]' in dockerfile
     assert "image: ${YUQA_IMAGE:-yuqa:latest}" in compose
     assert "yuqa-data:/data" in compose

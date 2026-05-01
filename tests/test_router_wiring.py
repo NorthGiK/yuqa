@@ -3,9 +3,9 @@
 from inspect import signature
 from pathlib import Path
 
-from yuqa.telegram.config import Settings
-from yuqa.telegram.router import build_router
-from yuqa.telegram.services.services import TelegramServices
+from src.telegram.config import Settings
+from src.telegram.router import build_router
+from src.telegram.services.services import TelegramServices
 
 
 def _message_callbacks(router) -> list:

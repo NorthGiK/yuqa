@@ -2,10 +2,10 @@
 
 import pytest
 
-from yuqa.ideas.domain.entities import Idea
-from yuqa.ideas.domain.services import IdeaService
-from yuqa.shared.enums import IdeaStatus
-from yuqa.shared.errors import ForbiddenActionError, ValidationError
+from src.ideas.domain.entities import Idea
+from src.ideas.domain.services import IdeaService
+from src.shared.enums import IdeaStatus
+from src.shared.errors import ForbiddenActionError, ValidationError
 
 
 def test_create_idea_trims_fields_and_starts_pending() -> None:

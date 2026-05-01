@@ -4,12 +4,12 @@ from pathlib import Path
 
 import pytest
 
-from yuqa.cards.domain.entities import Ability
-from yuqa.cards.domain.entities import PlayerCard
-from yuqa.infrastructure.sqlalchemy.migrations import upgrade_head
-from yuqa.infrastructure.sqlalchemy.repositories import create_sync_engine
-from yuqa.infrastructure.sqlalchemy.urls import sync_database_url
-from yuqa.shared.enums import (
+from src.cards.domain.entities import Ability
+from src.cards.domain.entities import PlayerCard
+from src.infrastructure.sqlalchemy.migrations import upgrade_head
+from src.infrastructure.sqlalchemy.repositories import create_sync_engine
+from src.infrastructure.sqlalchemy.urls import sync_database_url
+from src.shared.enums import (
     CardClass,
     CardForm,
     IdeaStatus,
@@ -17,9 +17,9 @@ from yuqa.shared.enums import (
     ResourceType,
     Universe,
 )
-from yuqa.shared.value_objects.deck_slots import DeckSlots
-from yuqa.shared.value_objects.stat_block import StatBlock
-from yuqa.telegram.services.services import TelegramServices
+from src.shared.value_objects.deck_slots import DeckSlots
+from src.shared.value_objects.stat_block import StatBlock
+from src.telegram.services.services import TelegramServices
 
 
 def _sqlite_url(path: Path) -> str:

@@ -2,12 +2,12 @@
 
 from datetime import datetime, timedelta, timezone
 
-from yuqa.banners.domain.entities import Banner, BannerReward
-from yuqa.banners.domain.services import BannerRollService
-from yuqa.players.domain.entities import Player
-from yuqa.shared.enums import BannerType, Rarity, ResourceType, RewardType
-from yuqa.shared.value_objects.date_range import DateRange
-from yuqa.shared.value_objects.resource_wallet import ResourceWallet
+from src.banners.domain.entities import Banner, BannerReward
+from src.banners.domain.services import BannerRollService
+from src.players.domain.entities import Player
+from src.shared.enums import BannerType, Rarity, ResourceType, RewardType
+from src.shared.value_objects.date_range import DateRange
+from src.shared.value_objects.resource_wallet import ResourceWallet
 
 
 def test_banner_roll_and_availability():

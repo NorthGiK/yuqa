@@ -6,8 +6,8 @@ from logging.config import fileConfig
 from alembic import context
 from sqlalchemy import engine_from_config, pool
 
-from yuqa.infrastructure.sqlalchemy.base import Base
-from yuqa.infrastructure.sqlalchemy import models  # noqa: F401
+from src.infrastructure.sqlalchemy.base import Base
+from src.infrastructure.sqlalchemy import models  # noqa: F401
 
 
 config = context.config

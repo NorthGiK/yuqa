@@ -4,8 +4,8 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 
-from yuqa.telegram.compat import CallbackQuery, Message, TelegramBadRequest, User
-from yuqa.telegram.reply import safe_edit, send_alert, send_notice
+from src.telegram.compat import CallbackQuery, Message, TelegramBadRequest, User
+from src.telegram.reply import safe_edit, send_alert, send_notice
 
 
 @pytest.mark.asyncio

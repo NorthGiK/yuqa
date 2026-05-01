@@ -5,9 +5,9 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 
-from yuqa.cards.domain.entities import Ability, AbilityEffect, CardTemplate, PlayerCard
-from yuqa.players.domain.entities import Player, ProfileBackgroundTemplate
-from yuqa.shared.enums import (
+from src.cards.domain.entities import Ability, AbilityEffect, CardTemplate, PlayerCard
+from src.players.domain.entities import Player, ProfileBackgroundTemplate
+from src.shared.enums import (
     AbilityStat,
     AbilityTarget,
     CardClass,
@@ -16,21 +16,21 @@ from yuqa.shared.enums import (
     Rarity,
     Universe,
 )
-from yuqa.shared.value_objects.deck_slots import DeckSlots
-from yuqa.shared.value_objects.image_ref import ImageRef
-from yuqa.shared.value_objects.resource_wallet import ResourceWallet
-from yuqa.shared.value_objects.stat_block import StatBlock
-from yuqa.telegram.compat import (
+from src.shared.value_objects.deck_slots import DeckSlots
+from src.shared.value_objects.image_ref import ImageRef
+from src.shared.value_objects.resource_wallet import ResourceWallet
+from src.shared.value_objects.stat_block import StatBlock
+from src.telegram.compat import (
     CallbackQuery,
     FSMContext,
     Message,
     TelegramBadRequest,
     User,
 )
-from yuqa.telegram.callbacks import BattleCallback, CardCallback
-from yuqa.telegram.media_storage import local_media_from_message
-from yuqa.telegram.reply import safe_edit, send_card_preview, send_media_preview
-from yuqa.telegram.router import (
+from src.telegram.callbacks import BattleCallback, CardCallback
+from src.telegram.media_storage import local_media_from_message
+from src.telegram.reply import safe_edit, send_card_preview, send_media_preview
+from src.telegram.router import (
     build_router,
     show_admin,
     show_card_detail,
@@ -47,9 +47,9 @@ from yuqa.telegram.router import (
     show_tops,
     search_battle,
 )
-from yuqa.telegram.router.router_views import show_battle_round, show_battle_switch
-from yuqa.telegram.services.services import TelegramServices
-from yuqa.telegram.texts.texts import (
+from src.telegram.router.views import show_battle_round, show_battle_switch
+from src.telegram.services.services import TelegramServices
+from src.telegram.texts.texts import (
     admin_text,
     battle_text,
     cards_text,
@@ -60,7 +60,7 @@ from yuqa.telegram.texts.texts import (
     profile_text,
     tops_text,
 )
-from yuqa.telegram.ui.ui import (
+from src.telegram.ui.ui import (
     admin_banner_markup,
     admin_choice_markup,
     admin_markup,
@@ -564,15 +564,15 @@ async def test_card_image_accepts_photo_and_effects_are_human_friendly(
 ) -> None:
     """The wizard should accept Telegram photos and readable effect syntax."""
 
-    from yuqa.telegram.router import _parse_effects
-    from yuqa.telegram.texts.texts import ability_effects_guide
+    from src.telegram.router import _parse_effects
+    from src.telegram.texts.texts import ability_effects_guide
 
     monkeypatch.setenv("YUQA_DATA_DIR", str(tmp_path))
     photo = [SimpleNamespace(file_id="photo-file-id")]
     message = Message(from_user=User(1), photo=photo, bot=_FakeDownloadBot())
     state = FSMContext()
 
-    from yuqa.telegram.router import card_image
+    from src.telegram.router import card_image
 
     await card_image(message, state)
     image_key = (await state.get_data())["image"]
@@ -672,7 +672,7 @@ async def test_battle_click_does_not_push_new_status_to_opponent() -> None:
         from_user=User(battle.first_turn_player_id), message=Message(text="old")
     )
 
-    from yuqa.telegram.callbacks import BattleCallback
+    from src.telegram.callbacks import BattleCallback
 
     await battle_actions(callback, BattleCallback(action="attack"))
 

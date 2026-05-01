@@ -2,9 +2,9 @@
 
 import pytest
 
-from yuqa.cards.domain.entities import Ability, AbilityEffect, CardTemplate, PlayerCard
-from yuqa.cards.domain.services import CardProgressionService, get_effective_stats
-from yuqa.shared.enums import (
+from src.cards.domain.entities import Ability, AbilityEffect, CardTemplate, PlayerCard
+from src.cards.domain.services import CardProgressionService, get_effective_stats
+from src.shared.enums import (
     AbilityStat,
     AbilityTarget,
     CardClass,
@@ -12,10 +12,10 @@ from yuqa.shared.enums import (
     Rarity,
     Universe,
 )
-from yuqa.shared.errors import ValidationError
-from yuqa.shared.value_objects.image_ref import ImageRef
-from yuqa.shared.value_objects.resource_wallet import ResourceWallet
-from yuqa.shared.value_objects.stat_block import StatBlock
+from src.shared.errors import ValidationError
+from src.shared.value_objects.image_ref import ImageRef
+from src.shared.value_objects.resource_wallet import ResourceWallet
+from src.shared.value_objects.stat_block import StatBlock
 
 
 def make_template() -> CardTemplate:

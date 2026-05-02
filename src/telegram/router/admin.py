@@ -3,7 +3,14 @@
 from src.shared.errors import DomainError, EntityNotFoundError, ValidationError
 from src.shared.enums import Rarity, ResourceType
 from src.telegram.callbacks import AdminCallback
-from src.telegram.compat import CallbackQuery, Command, CommandObject, FSMContext, Message, Router
+from src.telegram.compat import (
+    CallbackQuery,
+    Command,
+    CommandObject,
+    FSMContext,
+    Message,
+    Router,
+)
 from src.telegram.config import Settings
 from src.telegram.reply import send_notice
 from src.telegram.router.helpers import _parse_int, _profile_backgrounds, _templates
@@ -36,7 +43,11 @@ from src.telegram.texts import (
     profile_background_wizard_text,
     shop_wizard_text,
 )
-from src.telegram.ui import admin_banner_markup, admin_choice_markup, admin_wizard_markup
+from src.telegram.ui import (
+    admin_banner_markup,
+    admin_choice_markup,
+    admin_wizard_markup,
+)
 from src.telegram.services.services import TelegramServices
 from src.telegram.router.wizards_banners import (
     _banner_reward_finish,
@@ -100,7 +111,7 @@ def register_admin_handlers(
     settings: Settings,
 ) -> None:
     """Register admin-only commands, callbacks, and state handlers."""
-    
+
     _register_admin_commands(router, services, settings)
     _register_admin_callbacks(router, services, settings)
     _register_admin_state_handlers(router, services)
@@ -112,13 +123,13 @@ def _register_admin_commands(
     settings: Settings,
 ) -> None:
     """Register admin-only commands."""
-    
+
     @router.message(Command("admin"))
     async def open_admin(message: Message):
         if not message.from_user or message.from_user.id not in settings.admin_ids:
             return await message.answer("⛔ Доступ закрыт.")
         await show_admin(message, services)
-    
+
     @router.message(Command("creator_points"))
     async def award_creator_points(message: Message, command: CommandObject):
         if not message.from_user or message.from_user.id not in settings.admin_ids:
@@ -144,7 +155,7 @@ def _register_admin_callbacks(
     settings: Settings,
 ) -> None:
     """Register the admin callback family."""
-    
+
     @router.callback_query(AdminCallback.filter())
     async def admin_actions(
         callback: CallbackQuery,
@@ -205,9 +216,7 @@ def _register_admin_callbacks(
         if action == "player_add_card":
             return await start_admin_player_card_edit(callback.message, state, "add")
         if action == "player_remove_card":
-            return await start_admin_player_card_edit(
-                callback.message, state, "remove"
-            )
+            return await start_admin_player_card_edit(callback.message, state, "remove")
         if action == "create_banner":
             return await start_banner_create(callback.message, state)
         if action == "create_shop_item":
@@ -660,7 +669,9 @@ async def _start_banner_reward_edit(
         reward_kind=reward_kind,
     )
     label = "фона профиля" if reward_kind == "background" else "карты"
-    verb = "для баннера" if reward_action == "add" else "который нужно убрать из баннера"
+    verb = (
+        "для баннера" if reward_action == "add" else "который нужно убрать из баннера"
+    )
     return await callback.message.answer(
         f"Введи ID {label} {verb} ✍️",
         reply_markup=admin_wizard_markup("banners"),

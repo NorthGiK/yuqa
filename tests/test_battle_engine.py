@@ -183,8 +183,7 @@ def test_battle_engine_limits_bonus_actions_per_turn():
     engine.start_battle(battle)
     player_id = battle.first_turn_player_id
     actions = [
-        BonusAction(action_type=BattleActionType.BONUS, ap_cost=1)
-        for _ in range(6)
+        BonusAction(action_type=BattleActionType.BONUS, ap_cost=1) for _ in range(6)
     ]
 
     with pytest.raises(BattleRuleViolationError, match="more than 5 bonuses"):

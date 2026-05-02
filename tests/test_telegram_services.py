@@ -571,7 +571,9 @@ async def test_battle_ability_respects_cross_round_cooldown() -> None:
         ):
             battle = await services.record_battle_action(player_id, "attack")
 
-    assert services.battle_round_summary(battle, player_id).ability_cooldown_remaining == 0
+    assert (
+        services.battle_round_summary(battle, player_id).ability_cooldown_remaining == 0
+    )
 
 
 @pytest.mark.asyncio
@@ -775,7 +777,9 @@ async def test_bonus_carryover_keeps_attack_damage_calculation_correct() -> None
 
 
 @pytest.mark.asyncio
-async def test_battle_ap_carryover_allows_follow_up_actions_after_ability_cost_one() -> None:
+async def test_battle_ap_carryover_allows_follow_up_actions_after_ability_cost_one() -> (
+    None
+):
     """A 1 AP ability should not block later attacks or blocks in the same turn."""
 
     services = TelegramServices()

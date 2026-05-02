@@ -13,7 +13,9 @@ def test_create_idea_trims_fields_and_starts_pending() -> None:
 
     service = IdeaService()
 
-    idea = service.create(1, 42, "  Новая механика  ", "  Достаточно длинное описание  ")
+    idea = service.create(
+        1, 42, "  Новая механика  ", "  Достаточно длинное описание  "
+    )
 
     assert idea.id == 1
     assert idea.player_id == 42

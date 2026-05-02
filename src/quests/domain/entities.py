@@ -9,7 +9,7 @@ from src.shared.enums import QuestActionType, QuestPeriod
 @dataclass(frozen=True, slots=True)
 class QuestReward:
     """Reward bundle for a quest or battle pass level."""
-    
+
     coins: int = 0
     crystals: int = 0
     orbs: int = 0
@@ -19,7 +19,7 @@ class QuestReward:
 @dataclass(slots=True)
 class QuestDefinition:
     """Quest metadata configured by the admin panel."""
-    
+
     id: int
     period: QuestPeriod
     action_type: QuestActionType
@@ -44,8 +44,8 @@ class QuestProgress:
         
         if self.cooldown_until is None:
             return True
-        cooldown_until = _aware_utc(self.cooldown_until)
-        return cooldown_until <= _aware_utc(moment)
+        cooldown_until = aware_utc(self.cooldown_until)
+        return cooldown_until <= aware_utc(moment)
 
 
 @dataclass(frozen=True, slots=True)
@@ -61,7 +61,7 @@ class QuestCompletionResult:
     cooldown_until: datetime | None
 
 
-def _aware_utc(value: datetime) -> datetime:
+def aware_utc(value: datetime) -> datetime:
     """Normalize possibly naive datetimes before cooldown comparisons."""
     
     if value.tzinfo is None:

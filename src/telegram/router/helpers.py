@@ -13,7 +13,7 @@ from src.telegram.compat import Message
 
 def _parse_int(text: str, label: str, *, positive: bool = False) -> int:
     """Parse an integer with friendly validation errors."""
-    
+
     try:
         value = int((text or "").strip())
     except ValueError as error:
@@ -148,7 +148,9 @@ def _templates(services) -> dict[int, CardTemplate]:
     }
 
 
-def _paginate_items[T](items: list[T], page: int, size: int = 10) -> tuple[list[T], int, bool, bool, int]:
+def _paginate_items[T](
+    items: list[T], page: int, size: int = 10
+) -> tuple[list[T], int, bool, bool, int]:
     """Return a slice of items together with pagination flags."""
 
     if not items:

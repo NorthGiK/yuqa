@@ -77,9 +77,7 @@ def test_build_summary_includes_expected_entrypoints() -> None:
     assert summary["module_groups"]["telegram_texts"][-1] == (
         "src/telegram/texts/admin.py"
     )
-    assert summary["module_groups"]["telegram_ui"][-1] == (
-        "src/telegram/ui/admin.py"
-    )
+    assert summary["module_groups"]["telegram_ui"][-1] == ("src/telegram/ui/admin.py")
 
 
 def test_build_summary_reports_known_feature() -> None:

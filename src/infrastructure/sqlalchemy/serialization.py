@@ -67,14 +67,14 @@ def _mapping_codec(
     load_key: Callable[[str], Any] = lambda value: int(value),
 ) -> SectionCodec:
     """Build a codec for mapping-based sections."""
-    
+
     def dump(items: dict[Any, Any]) -> dict[str, Any]:
         return {dump_key(key): dump_item(item) for key, item in items.items()}
-    
+
     def load(payload: Any) -> dict[Any, Any]:
         data = payload or {}
         return {load_key(key): load_item(value) for key, value in dict(data).items()}
-    
+
     return SectionCodec(dump=dump, load=load)
 
 
@@ -83,36 +83,36 @@ def _list_codec(
     load_item: Callable[[Any], Any] | None = None,
 ) -> SectionCodec:
     """Build a codec for list-based sections."""
-    
+
     def dump(items: list[Any]) -> list[Any]:
         if dump_item is None:
             return list(items)
         return [dump_item(item) for item in items]
-    
+
     def load(payload: Any) -> list[Any]:
         data = list(payload or [])
         if load_item is None:
             return data
         return [load_item(item) for item in data]
-    
+
     return SectionCodec(dump=dump, load=load)
 
 
 def _identity_dict_codec() -> SectionCodec:
     """Build a codec for plain dictionary payloads."""
-    
+
     def dump(payload: dict[str, Any]) -> dict[str, Any]:
         return dict(payload)
-    
+
     def load(payload: Any) -> dict[str, Any]:
         return dict(payload or {})
-    
+
     return SectionCodec(dump=dump, load=load)
 
 
 def _player_to_dict(player: Player) -> dict[str, Any]:
     """Serialize a player aggregate."""
-    
+
     return {
         "telegram_id": player.telegram_id,
         "rating": player.rating,

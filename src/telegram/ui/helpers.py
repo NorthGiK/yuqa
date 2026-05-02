@@ -11,7 +11,9 @@ from src.telegram.compat import (
 )
 
 
-def _markup(buttons: list[tuple[str, KeyboardButton]], sizes: tuple[int, ...]) -> InlineKeyboardMarkup:
+def _markup(
+    buttons: list[tuple[str, KeyboardButton]], sizes: tuple[int, ...]
+) -> InlineKeyboardMarkup:
     """Build a markup from a list of button specs."""
 
     builder = InlineKeyboardBuilder()

@@ -17,14 +17,14 @@ from src.telegram.ui import battle_actions_markup
 @dataclass(slots=True)
 class App:
     """Small bundle with the runtime objects."""
-    
+
     settings: Settings
     services: TelegramServices
 
 
 def build_app() -> App:
     """Build the application state from environment variables."""
-    
+
     settings = Settings.from_env()
     if settings.auto_migrate:
         upgrade_head(settings.database_url)
@@ -39,7 +39,7 @@ def build_app() -> App:
 
 async def main() -> None:
     """Start the bot in long polling mode."""
-    
+
     app = build_app()
     bot = build_bot(app.settings)
     app.services.configure_battle_timeout_notifier(

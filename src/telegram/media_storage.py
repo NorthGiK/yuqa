@@ -122,7 +122,9 @@ async def _store_media_source(
         return relative_path.as_posix(), content_type
     if parsed.scheme in {"http", "https"}:
         try:
-            downloaded_type = await asyncio.to_thread(_download_url, source, destination)
+            downloaded_type = await asyncio.to_thread(
+                _download_url, source, destination
+            )
         except OSError as error:
             raise ValidationError("could not store media locally") from error
         return relative_path.as_posix(), downloaded_type or content_type
@@ -180,7 +182,11 @@ async def local_media_from_message(
     text = (message.text or "").strip()
     if not text:
         return None, _DEFAULT_CONTENT_TYPE
-    content_type = "video/mp4" if text.lower().endswith((".mp4", ".mov", ".webm")) else _DEFAULT_CONTENT_TYPE
+    content_type = (
+        "video/mp4"
+        if text.lower().endswith((".mp4", ".mov", ".webm"))
+        else _DEFAULT_CONTENT_TYPE
+    )
     return await _store_media_source(text, folder, content_type=content_type, bot=bot)
 
 

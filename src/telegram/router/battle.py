@@ -114,7 +114,9 @@ async def search_battle(event, services, player_id: int, bot=None):
         await bot.send_message(
             other_id,
             battle_result_text(
-                battle, await services.get_player(other_id) or await services.get_or_create_player(other_id)
+                battle,
+                await services.get_player(other_id)
+                or await services.get_or_create_player(other_id),
             )
             if battle.status.value != "active"
             else battle_started_text(battle)

@@ -143,7 +143,6 @@ async def show_collection(event, services, player_id: int):
 
 async def show_cards(event, services, player_id: int, page: int = 1):
     """Show the card collection."""
-    
 
     cards: list[PlayerCard] = sorted(
         await services.list_player_cards(player_id), key=lambda card: card.id
@@ -556,7 +555,7 @@ async def show_admin(
     page: int = 1,
 ) -> None:
     """Show the admin dashboard or a section page."""
-    
+
     counts = await services.admin_counts()
     templates = _templates(services)
     backgrounds: dict[int, ProfileBackgroundTemplate] = _profile_backgrounds(services)
@@ -566,14 +565,14 @@ async def show_admin(
     shop_items = list(services.shop.items.values())
     standard_cards = await services.list_standard_cards()
     universes = await services.list_universes()
-    
+
     match section:
         case "cards":
             text, markup = (
                 admin_text(counts, "cards") + "\n\n" + admin_cards_text(cards),
                 admin_markup("cards"),
             )
-        
+
         case "profile_backgrounds":
             text, markup = (
                 admin_text(counts, "profile_backgrounds")
@@ -581,14 +580,14 @@ async def show_admin(
                 + admin_profile_backgrounds_text(profile_backgrounds),
                 admin_markup("profile_backgrounds"),
             )
-        
+
         case "players":
             text, markup = (
                 admin_text(counts, "players")
                 + "\n\n<i>Через этот раздел можно начислять Creator Points, задавать титул и переключать premium-статус игроку по ID.</i>",
                 admin_markup("players"),
             )
-        
+
         case "banners":
             if banners:
                 banner = next(
@@ -610,13 +609,13 @@ async def show_admin(
                     + "\n\n<i>Пока баннеров нет. Самое время создать первый ✨</i>",
                     admin_markup("banners"),
                 )
-        
+
         case "shop":
             text, markup = (
                 admin_text(counts, "shop") + "\n\n" + shop_text(shop_items),
                 admin_markup("shop"),
             )
-        
+
         case "standard_cards":
             text, markup = (
                 admin_text(counts, "standard_cards")
@@ -624,13 +623,13 @@ async def show_admin(
                 + standard_cards_text(standard_cards, templates),
                 admin_markup("standard_cards"),
             )
-        
+
         case "universes":
             text, markup = (
                 admin_text(counts, "universes") + "\n\n" + universes_text(universes),
                 admin_markup("universes"),
             )
-        
+
         case "battle_pass":
             season = await services.active_battle_pass()
             seasons = await services.list_battle_pass_seasons()
@@ -642,7 +641,7 @@ async def show_admin(
                 + battle_pass_seasons_text(seasons),
                 admin_markup("battle_pass"),
             )
-        
+
         case "premium_battle_pass":
             season = await services.active_premium_battle_pass()
             seasons = await services.list_premium_battle_pass_seasons()

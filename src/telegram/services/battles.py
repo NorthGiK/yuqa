@@ -150,14 +150,12 @@ class BattleServiceMixin(_BattleServiceMixinBase):
 
         first_player_id = battle.first_turn_player_id or battle.player_one_id
         opponent_id = battle.opponent_side_for(first_player_id).player_id
-        first_total_action_points = (
-            self._base_round_ap(battle.current_round)
-            + self._bonus_carryover_points(battle, first_player_id)
-        )
-        opponent_total_action_points = (
-            self._base_round_ap(battle.current_round)
-            + self._bonus_carryover_points(battle, opponent_id)
-        )
+        first_total_action_points = self._base_round_ap(
+            battle.current_round
+        ) + self._bonus_carryover_points(battle, first_player_id)
+        opponent_total_action_points = self._base_round_ap(
+            battle.current_round
+        ) + self._bonus_carryover_points(battle, opponent_id)
         (
             _first_attack_count,
             _first_block_count,
@@ -591,9 +589,7 @@ class BattleServiceMixin(_BattleServiceMixinBase):
                 side = battle.side_for(player_id)
                 card = side.cards.get(card_id)
                 if card is None or not card.alive:
-                    raise BattleRuleViolationError(
-                        "cannot switch to dead/unknown card"
-                    )
+                    raise BattleRuleViolationError("cannot switch to dead/unknown card")
                 actions.append(
                     SwitchCardAction(
                         action_type=BattleActionType.SWITCH_CARD,

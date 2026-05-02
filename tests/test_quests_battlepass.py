@@ -1,5 +1,4 @@
 """Tests for quests and battle pass."""
-
 from datetime import datetime, timedelta, timezone
 
 import pytest
@@ -11,9 +10,16 @@ from src.battle_pass.domain.entities import (
 )
 from src.battle_pass.domain.services import BattlePassService
 from src.players.domain.entities import Player
-from src.quests.domain.entities import QuestDefinition, QuestProgress, QuestReward
+from src.quests.domain.entities import (
+    QuestCompletionResult,
+    QuestDefinition,
+    QuestProgress,
+    QuestReward,
+)
 from src.quests.domain.services import QuestResetService, QuestService
 from src.shared.enums import QuestActionType, QuestPeriod
+from src.telegram.compat import Message, User
+from src.telegram.decorators.quests import quest_init
 from src.telegram.services.services import TelegramServices
 
 
@@ -50,7 +56,7 @@ def test_quest_completion_sets_cooldown_and_count() -> None:
     )
     player = Player(telegram_id=1)
     progress = QuestProgress(player_id=1, quest_id=7)
-
+    
     result = QuestService().complete_if_ready(
         player,
         quest,
@@ -113,39 +119,40 @@ async def test_battle_pass_service_can_buy_next_level():
 @pytest.mark.asyncio
 async def test_action_quest_completion_respects_player_cooldown() -> None:
     """The service helper should grant rewards only after cooldown expiry."""
-
+    
     services = TelegramServices()
     reward = QuestReward(coins=25, battle_pass_points=4)
     started_at = datetime(2026, 5, 1, 9, tzinfo=timezone.utc)
-
-    first = await services.complete_action_quest(
-        player_id=1,
-        quest_id=101,
-        action_type=QuestActionType.CARD_LEVEL_UP,
+    
+    player_id = 1
+    quest_id = 5
+    quest = QuestDefinition(
+        id=quest_id,
+        period=QuestPeriod.DAILY,
+        action_type=QuestActionType.SHOP_PURCHASE,
         reward=reward,
-        cooldown=timedelta(hours=2),
+        cooldown=timedelta(days=1),
+    )
+    
+    first = await services.complete_action_quest(
+        player_id=player_id,
+        quest=quest,
         now=started_at,
     )
     blocked = await services.complete_action_quest(
-        player_id=1,
-        quest_id=101,
-        action_type=QuestActionType.CARD_LEVEL_UP,
-        reward=reward,
-        cooldown=timedelta(hours=2),
+        player_id=player_id,
+        quest=quest,
         now=started_at + timedelta(minutes=30),
     )
     second = await services.complete_action_quest(
-        player_id=1,
-        quest_id=101,
-        action_type=QuestActionType.CARD_LEVEL_UP,
-        reward=reward,
-        cooldown=timedelta(hours=2),
-        now=started_at + timedelta(hours=2),
+        player_id=player_id,
+        quest=quest,
+        now=started_at + timedelta(days=2),
     )
-
-    player = await services.get_player(1)
-    progress = await services.quests.get_progress(1, 101)
-
+    
+    player = await services.get_player(player_id)
+    progress = await services.quests.get_progress(player_id, quest_id)
+    
     assert first.completed
     assert blocked.completed is False
     assert second.completed
@@ -154,3 +161,53 @@ async def test_action_quest_completion_respects_player_cooldown() -> None:
     assert player.battle_pass_progress == [4, 4]
     assert progress is not None
     assert progress.completed_count == 2
+
+
+@pytest.mark.asyncio
+async def test_quest_decorator_uses_persistent_completion_helper() -> None:
+    """The decorator should delegate to the service helper, not create progress."""
+    
+    calls: list[dict[str, object]] = []
+    
+    class _Services:
+        async def complete_action_quest(self, **kwargs):
+            calls.append(kwargs)
+            return QuestCompletionResult(
+                player_id=kwargs["player_id"],
+                quest_id=kwargs["quest_id"],
+                action_type=kwargs["action_type"],
+                completed=True,
+                reward=kwargs["reward"],
+                completed_at=None,
+                cooldown_until=None,
+            )
+    
+    quest = QuestDefinition(
+        id=777,
+        period=QuestPeriod.DAILY,
+        action_type=QuestActionType.DAILY_ROUTINE,
+        reward=QuestReward(coins=12),
+        cooldown=timedelta(minutes=5),
+    )
+    services = _Services()
+    handled: list[str | None] = []
+
+    @quest_init(services, quest)
+    async def handler(message: Message) -> str:
+        handled.append(message.text)
+        return "ok"
+    
+    result = await handler(Message(from_user=User(52), text="/start"))
+    
+    assert result == "ok"
+    assert handled == ["/start"]
+    assert calls == [
+        {
+            "player_id": 52,
+            "quest_id": 777,
+            "action_type": QuestActionType.DAILY_ROUTINE,
+            "reward": QuestReward(coins=12),
+            "cooldown": timedelta(minutes=5),
+            "period": QuestPeriod.DAILY,
+        }
+    ]

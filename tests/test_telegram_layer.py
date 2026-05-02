@@ -875,7 +875,9 @@ async def test_finished_battle_renders_result_screen() -> None:
 
 
 @pytest.mark.asyncio
-async def test_stale_battle_button_recovers_to_battle_screen_instead_of_notice() -> None:
+async def test_stale_battle_button_recovers_to_battle_screen_instead_of_notice() -> (
+    None
+):
     """A stale battle callback should reopen the current battle screen, not show an alert."""
 
     services = TelegramServices()
@@ -958,7 +960,9 @@ def test_back_buttons_are_removed_from_static_admin_and_detail_keyboards() -> No
 
     assert "⬅️ Назад" not in _button_texts(admin_markup("dashboard"))
     assert "⬅️ Назад" not in _button_texts(admin_markup("cards"))
-    assert "⬅️ Назад" not in _button_texts(admin_choice_markup("card_rarity", [("A", "a")]))
+    assert "⬅️ Назад" not in _button_texts(
+        admin_choice_markup("card_rarity", [("A", "a")])
+    )
     assert "⬅️ Назад" not in _button_texts(admin_banner_markup(1, False))
     assert "⬅️ Назад" not in _button_texts(card_level_up_confirm_markup(1))
     assert "⬅️ В коллекцию" not in _button_texts(card_markup(1, False, False, False))

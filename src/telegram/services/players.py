@@ -3,7 +3,7 @@
 import re
 from collections.abc import Mapping
 from datetime import datetime, timedelta, timezone
-from typing import TYPE_CHECKING, TypeVar
+from typing import TypeVar
 
 from src.banners.domain.entities import BannerReward
 from src.cards.domain.entities import CardTemplate, PlayerCard
@@ -46,18 +46,7 @@ _TOP_MODES = {"rating", "badenko_cards", "creator_points"}
 _WeightedKey = TypeVar("_WeightedKey")
 
 
-if TYPE_CHECKING:
-
-    class _PlayerProfileServiceMixinBase(TelegramServiceContext):
-        """Type-only base for mixin attribute and method completion."""
-
-else:
-
-    class _PlayerProfileServiceMixinBase:
-        """Runtime base without protocol method stubs."""
-
-
-class PlayerProfileServiceMixin(_PlayerProfileServiceMixinBase):
+class PlayerProfileServiceMixin(TelegramServiceContext):
     """Player lookup, profile, free reward, and deck editing helpers."""
 
     async def get_or_create_player(self, telegram_id: int) -> Player:

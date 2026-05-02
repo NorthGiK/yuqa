@@ -75,15 +75,17 @@ async def start_card_create(message: Message, state: FSMContext):
     )
 
 
-async def start_admin_player_card_edit(
-    message: Message, state: FSMContext, mode: str
-):
+async def start_admin_player_card_edit(message: Message, state: FSMContext, mode: str):
     """Start the admin flow for granting or revoking a player's card."""
 
     await state.clear()
     await state.set_state(AdminPlayerCardEdit.player_id)
     await state.update_data(mode=mode)
-    title = "➕ <b>Выдать карту игроку</b>" if mode == "add" else "➖ <b>Забрать карту у игрока</b>"
+    title = (
+        "➕ <b>Выдать карту игроку</b>"
+        if mode == "add"
+        else "➖ <b>Забрать карту у игрока</b>"
+    )
     await message.answer(
         f"{title}\nВведи ID игрока.",
         reply_markup=admin_wizard_markup("cards"),

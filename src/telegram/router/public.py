@@ -1,9 +1,5 @@
 """Public command, callback, and wizard handler registration."""
 
-from datetime import timedelta
-
-from src.shared.enums import QuestActionType, QuestPeriod
-from src.quests.domain.entities import QuestReward
 from src.shared.errors import (
     BattleRuleViolationError,
     DomainError,
@@ -83,6 +79,9 @@ from src.telegram.texts import (
     card_level_up_confirm_text,
     profile_background_text,
 )
+from src.telegram.quests import (
+    DAILITY_START,
+)
 from src.telegram.ui import (
     COLLECTION_MENU_BUTTON,
     MAIN_MENU_BUTTON_TEXTS,
@@ -120,7 +119,7 @@ def _register_public_commands(
     settings: Settings,
 ) -> None:
     """Register public command and menu handlers."""
-    
+
     @router.message(CommandStart())
     async def start(message: Message):
         if message.from_user:
@@ -130,10 +129,14 @@ def _register_public_commands(
                 message.from_user.id,
                 is_admin=message.from_user.id in settings.admin_ids,
             )
-    
+
     @router.message(Command("menu"))
     async def open_menu(message: Message):
         if message.from_user:
+            await services.complete_action_quest(
+                player_id=message.from_user.id,
+                quest=DAILITY_START,
+            )
             await show_home(
                 message,
                 services,
@@ -373,7 +376,7 @@ def _register_public_callbacks(router: Router, services, settings) -> None:
         page = max(callback_data.page, 1)
         scope = callback_data.scope
         if action == "propose":
-            return await start_idea_proposal(callback.message, state) #type:ignore
+            return await start_idea_proposal(callback.message, state)  # type:ignore
         if action == "page":
             if scope == "collection":
                 return await show_idea_collection(
@@ -467,7 +470,7 @@ def _register_public_callbacks(router: Router, services, settings) -> None:
         if not callback.from_user:
             return await callback.answer()
         if callback_data.action == "edit_nickname":
-            return await start_profile_nickname_edit(callback.message, state) #type:ignore
+            return await start_profile_nickname_edit(callback.message, state)  # type:ignore
         if callback_data.action == "clear_nickname":
             await services.set_player_nickname(callback.from_user.id, None)
             return await show_profile(callback, services, callback.from_user.id)

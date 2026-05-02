@@ -26,8 +26,8 @@ class QuestService:
         completed_at: datetime | None = None,
     ) -> QuestCompletionResult:
         """Complete the quest only when its player cooldown has expired."""
-
-        moment = _aware_utc(completed_at)
+        
+        moment = aware_utc(completed_at)
         if not progress.can_complete_at(moment):
             return QuestCompletionResult(
                 player_id=player.telegram_id,
@@ -38,7 +38,7 @@ class QuestService:
                 completed_at=progress.completed_at,
                 cooldown_until=progress.cooldown_until,
             )
-
+        
         reward = self.complete(player, quest, progress, completed_at=moment)
         return QuestCompletionResult(
             player_id=player.telegram_id,
@@ -60,12 +60,13 @@ class QuestService:
     ) -> QuestReward:
         """Mark the quest as done and pay the reward."""
 
-        moment = _aware_utc(completed_at)
+        moment: datetime = aware_utc(completed_at)
+        reward: QuestReward = quest.reward
         progress.completed = True
         progress.completed_count += 1
         progress.completed_at = moment
         progress.cooldown_until = moment + quest.cooldown
-        reward = quest.reward
+
         if reward.coins:
             player.wallet.add(ResourceType.COINS, reward.coins)
         if reward.crystals:
@@ -99,7 +100,7 @@ class QuestResetService:
             progress.completed_at = None
 
 
-def _aware_utc(value: datetime | None) -> datetime:
+def aware_utc(value: datetime | None) -> datetime:
     """Normalize optional datetimes for quest cooldown calculations."""
 
     if value is None:

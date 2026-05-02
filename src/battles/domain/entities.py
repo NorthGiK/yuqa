@@ -71,7 +71,11 @@ class BattleSide:
     def alive_cards(self) -> list[BattleCardState]:
         """Return all surviving cards."""
 
-        return [card for card in self.cards.values() if card.alive and card.current_health > 0]
+        return [
+            card
+            for card in self.cards.values()
+            if card.alive and card.current_health > 0
+        ]
 
     def active_card(self) -> BattleCardState:
         """Return the currently active card."""

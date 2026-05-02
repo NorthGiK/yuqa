@@ -121,9 +121,7 @@ async def test_card_wizard_can_pick_existing_universe_from_admin_callback() -> N
             for event_type, _filters, callback in router.handlers
             if event_type == "callback_query" and callback.__name__ == "admin_actions"
         )
-    callback = CallbackQuery(
-        from_user=admin, message=Message(from_user=admin, text="")
-    )
+    callback = CallbackQuery(from_user=admin, message=Message(from_user=admin, text=""))
 
     await admin_actions(
         callback,
@@ -239,7 +237,9 @@ async def test_remove_card_from_player_cleans_deck_and_draft_for_last_copy() -> 
     )
 
     player = await services.get_or_create_player(77)
-    removed_card = await services.grant_card_to_player(player.telegram_id, removed_template.id)
+    removed_card = await services.grant_card_to_player(
+        player.telegram_id, removed_template.id
+    )
     kept_cards = []
     for _ in range(4):
         kept_cards.append(
@@ -269,7 +269,10 @@ async def test_remove_card_from_player_cleans_deck_and_draft_for_last_copy() -> 
 
     assert player.battle_deck is None
     assert services.deck_drafts[player.telegram_id] == [card.id for card in extra_cards]
-    assert all(card.template_id == kept_template.id for card in await services.list_player_cards(player.telegram_id))
+    assert all(
+        card.template_id == kept_template.id
+        for card in await services.list_player_cards(player.telegram_id)
+    )
 
 
 @pytest.mark.asyncio

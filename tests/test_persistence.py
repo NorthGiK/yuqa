@@ -5,6 +5,7 @@ from pathlib import Path
 
 import pytest
 
+from src.quests import QuestDefinition, QuestPeriod
 from src.cards.domain.entities import Ability
 from src.cards.domain.entities import PlayerCard
 from src.infrastructure.sqlalchemy.migrations import upgrade_head
@@ -202,7 +203,10 @@ async def test_database_services_persist_battle_results(tmp_path: Path) -> None:
         ascended_stats=StatBlock(1, 1, 0),
         ability=Ability(0, 0),
     )
-    for player_id, template_id in ((1, attacker_template.id), (2, defender_template.id)):
+    for player_id, template_id in (
+        (1, attacker_template.id),
+        (2, defender_template.id),
+    ):
         player = await services.get_or_create_player(player_id)
         player.battle_deck = DeckSlots(
             (
@@ -272,39 +276,39 @@ async def test_database_services_persist_quest_cooldowns(tmp_path: Path) -> None
     database_url = _sqlite_url(tmp_path / "quests.db")
     upgrade_head(database_url)
     started_at = datetime(2026, 5, 1, 10, tzinfo=timezone.utc)
+    player_id = 500
+    quest_id = 3
     reward = QuestReward(coins=10)
 
     services = TelegramServices(catalog_path, database_url=database_url)
-    first = await services.complete_action_quest(
-        player_id=1,
-        quest_id=500,
-        action_type=QuestActionType.SHOP_PURCHASE,
+    quest = QuestDefinition(
+        id=quest_id,
+        period=QuestPeriod.DAILY,
+        action_type=QuestActionType.DAILY_ROUTINE,
         reward=reward,
         cooldown=timedelta(hours=1),
+    )
+    first = await services.complete_action_quest(
+        player_id=player_id,
+        quest=quest,
         now=started_at,
     )
     await services.shutdown()
-
+    
     reloaded = TelegramServices(catalog_path, database_url=database_url)
     blocked = await reloaded.complete_action_quest(
-        player_id=1,
-        quest_id=500,
-        action_type=QuestActionType.SHOP_PURCHASE,
-        reward=reward,
-        cooldown=timedelta(hours=1),
+        player_id=player_id,
+        quest=quest,
         now=started_at + timedelta(minutes=30),
     )
     second = await reloaded.complete_action_quest(
-        player_id=1,
-        quest_id=500,
-        action_type=QuestActionType.SHOP_PURCHASE,
-        reward=reward,
-        cooldown=timedelta(hours=1),
-        now=started_at + timedelta(hours=1),
+        player_id=player_id,
+        quest=quest,
+        now=started_at + timedelta(hours=2),
     )
-    player = await reloaded.get_player(1)
-    progress = await reloaded.quests.get_progress(1, 500)
-
+    player = await reloaded.get_player(player_id)
+    progress = await reloaded.quests.get_progress(player_id, quest_id)
+    
     assert first.completed
     assert blocked.completed is False
     assert second.completed
@@ -312,14 +316,14 @@ async def test_database_services_persist_quest_cooldowns(tmp_path: Path) -> None
     assert player.wallet.coins == 20
     assert progress is not None
     assert progress.completed_count == 2
-
+    
     await reloaded.shutdown()
 
 
 @pytest.mark.asyncio
 async def test_database_services_import_legacy_catalog_once(tmp_path: Path) -> None:
     """The first database boot should import the legacy catalog JSON."""
-
+    
     catalog_path = tmp_path / "catalog.json"
     legacy = TelegramServices(catalog_path)
     template = await legacy.create_card_template(
@@ -339,13 +343,13 @@ async def test_database_services_import_legacy_catalog_once(tmp_path: Path) -> N
         5,
         True,
     )
-
+    
     database_url = _sqlite_url(tmp_path / "import.db")
     upgrade_head(database_url)
-
+    
     imported = TelegramServices(catalog_path, database_url=database_url)
-
+    
     assert imported.card_templates.items[template.id].name == "Legacy"
     assert imported.shop.items[1].price == 100
-
+    
     await imported.shutdown()

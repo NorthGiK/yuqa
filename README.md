@@ -3,6 +3,21 @@
 Telegram game bot with persistent runtime storage, Alembic migrations, and
 container deployment support.
 
+English | [Русский](README.ru.md)
+
+## For Players
+
+Yuqa is a Telegram game, not a separate desktop or mobile app.
+
+You play it inside Telegram by opening the bot and using commands, buttons, and
+menus. The game includes profile progression, cards, battles, quests, clans,
+the shop, banners, and battle pass systems. Your progress is stored
+persistently, so your account does not reset when the service restarts.
+
+If you are only playing, you do not need the development notes below. The
+important part is that Yuqa keeps your game state, inventory, and rewards in
+storage between sessions.
+
 ## Local development
 
 ```bash
@@ -96,13 +111,12 @@ make agent-check
 ## Docker deployment
 
 ```bash
-docker build -f docker/Dockerfile -t yuqa:latest .
-docker compose -f docker/compose.yaml up -d
+docker build -t yuqa:latest .
 ```
 
-`docker/compose.yaml` mounts `/data` as a persistent volume. The image healthcheck
-uses the same SQLite URL format as the application, and Compose restarts the
-bot automatically if it crashes.
+The container image copies the application source, runs `uv sync` during build,
+and starts the bot with `uv run yuqa`. If you want persistent state outside the
+container, mount `/data` into the container and keep the SQLite database there.
 
 ## GitLab CI/CD
 

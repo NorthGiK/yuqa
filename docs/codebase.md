@@ -5,6 +5,11 @@ Yuqa is a Telegram game bot. The project mixes turn-based battles, card
 collection, banners, clans, ideas, a shop, and battle pass systems behind one
 bot-facing transport layer.
 
+`README.md` is the player-facing and developer-facing entrypoint in English,
+and `README.ru.md` is the Russian localization. Keep the player overview at the
+top of both files so non-developers can understand what Yuqa is without reading
+the implementation notes.
+
 The codebase is organized around three main concerns:
 - Domain rules in `src/<feature>/domain/`
 - Telegram transport and presentation in `src/telegram/`
@@ -127,6 +132,14 @@ Current feature packages:
 - `states.py`: FSM state groups
 - `texts/`: package root plus family-specific copy modules
 - `ui/`: package root plus family-specific markup modules
+
+## Documentation Surfaces
+- `README.md`: primary overview for players and developers in English.
+- `README.ru.md`: Russian localization of the main README.
+- `docs/codebase.md`: architecture and package map.
+- `docs/tests.md`: test inventory and coverage guidance.
+- `docs/ai-agents.md`: shortest path for runtime, transport, domain, and
+  persistence work.
 
 ### `src/infrastructure/`
 - `local.py`: JSON-backed catalog persistence and shared serializers

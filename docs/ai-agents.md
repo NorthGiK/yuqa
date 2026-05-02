@@ -174,5 +174,6 @@ Before expanding those files, confirm the logic cannot live in:
 
 ## Extra Docs
 - `docs/codebase.md`: fuller architecture and package map.
-- `src/README.md`: package-level navigation.
-- `tests/README.md`: test inventory and where to add coverage.
+- `README.md`: main English overview for players and developers.
+- `README.ru.md`: Russian localization of the main overview.
+- `docs/tests.md`: test inventory and where to add coverage.

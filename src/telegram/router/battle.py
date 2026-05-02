@@ -1,7 +1,9 @@
 """Battle command helpers shared by router registrations."""
 
+from aiogram.filters import CommandObject
+from aiogram.types import Message
+
 from src.shared.errors import DomainError, ValidationError
-from src.telegram.compat import CommandObject, Message
 from src.telegram.reply import send_alert, send_or_edit
 from src.telegram.router.views import show_battle
 from src.telegram.texts import (

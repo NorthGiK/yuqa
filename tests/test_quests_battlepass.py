@@ -18,9 +18,9 @@ from src.quests.domain.entities import (
 )
 from src.quests.domain.services import QuestResetService, QuestService
 from src.shared.enums import QuestActionType, QuestPeriod
-from src.telegram.compat import Message, User
 from src.telegram.decorators.quests import quest_init
 from src.telegram.services.services import TelegramServices
+from tests.telegram_fakes import Message, User
 
 
 def test_quest_completion_and_reset():

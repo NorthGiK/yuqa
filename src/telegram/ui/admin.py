@@ -1,7 +1,8 @@
 """Admin control keyboards."""
 
+from aiogram.types import InlineKeyboardMarkup
+
 from src.telegram.callbacks import AdminCallback
-from src.telegram.compat import InlineKeyboardMarkup
 from src.telegram.ui.helpers import _choice_markup, _markup
 
 

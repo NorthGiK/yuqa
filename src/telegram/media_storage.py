@@ -10,8 +10,9 @@ from shutil import copyfile
 from urllib.parse import urlparse
 from urllib.request import Request, urlopen
 
+from aiogram.types import Message
+
 from src.shared.errors import ValidationError
-from src.telegram.compat import Message
 
 
 _DEFAULT_CONTENT_TYPE = "image/png"

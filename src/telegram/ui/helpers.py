@@ -1,14 +1,10 @@
 """Small markup helpers shared across Telegram UI modules."""
 
 from aiogram.types import KeyboardButton
+from aiogram.types import InlineKeyboardMarkup, ReplyKeyboardMarkup
+from aiogram.utils.keyboard import InlineKeyboardBuilder, ReplyKeyboardBuilder
 
 from src.telegram.callbacks import AdminCallback
-from src.telegram.compat import (
-    InlineKeyboardBuilder,
-    InlineKeyboardMarkup,
-    ReplyKeyboardBuilder,
-    ReplyKeyboardMarkup,
-)
 
 
 def _markup(

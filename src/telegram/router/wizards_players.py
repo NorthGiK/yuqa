@@ -1,7 +1,8 @@
 """Player, clan, profile, and idea wizard flows."""
 
 from src.shared.errors import DomainError, ValidationError
-from src.telegram.compat import FSMContext, Message
+from aiogram.fsm.context import FSMContext
+from aiogram.types import Message
 from src.telegram.router.helpers import _parse_int
 from src.telegram.router.views import show_admin, show_ideas, show_profile
 from src.telegram.services.services import TelegramServices

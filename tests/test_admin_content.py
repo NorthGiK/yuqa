@@ -25,7 +25,6 @@ from src.shared.value_objects.deck_slots import DeckSlots
 from src.shared.value_objects.resource_wallet import ResourceWallet
 from src.shared.value_objects.stat_block import StatBlock
 from src.telegram.callbacks import AdminCallback
-from src.telegram.compat import CallbackQuery, FSMContext, Message, User
 from src.telegram.config import Settings
 from src.telegram.router import (
     build_router,
@@ -49,6 +48,7 @@ from src.telegram.router import (
 )
 from src.telegram.states import AdminPlayerCardEdit, CardCreate
 from src.telegram.services.services import TelegramServices
+from tests.telegram_fakes import CallbackQuery, FSMContext, Message, User
 
 
 @pytest.mark.asyncio

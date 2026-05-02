@@ -122,7 +122,6 @@ Current feature packages:
 ### `src/telegram/`
 - `bot.py`: dispatcher/bot construction
 - `callbacks.py`: callback payload schemas
-- `compat.py`: aiogram compatibility shims and test doubles
 - `config.py`: env parsing
 - `reply.py`: safe send/edit helpers
 - `router/`: router builder, handler registration, wizard steps, reusable

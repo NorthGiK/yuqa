@@ -1,6 +1,6 @@
-"""Router compatibility surface and builder for the Telegram bot."""
+"""Router surface and builder for the Telegram bot."""
 
-from src.telegram.compat import Router
+from aiogram import Router
 from src.telegram.config import Settings
 from src.telegram.services.services import TelegramServices
 from src.telegram.router.admin import register_admin_handlers

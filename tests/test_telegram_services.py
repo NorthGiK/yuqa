@@ -32,7 +32,6 @@ from src.shared.value_objects.deck_slots import DeckSlots
 from src.shared.value_objects.image_ref import ImageRef
 from src.shared.value_objects.resource_wallet import ResourceWallet
 from src.shared.value_objects.stat_block import StatBlock
-from src.telegram.compat import CommandObject, FSMContext, Message, User
 from src.telegram.router import (
     capture_admin_player_id,
     capture_admin_player_value,
@@ -54,6 +53,7 @@ from src.telegram.router import (
 )
 from src.telegram.services.services import TelegramServices
 from src.telegram.texts import battle_started_text
+from tests.telegram_fakes import CommandObject, FSMContext, Message, User
 
 
 @pytest.fixture()

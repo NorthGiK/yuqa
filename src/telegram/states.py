@@ -1,6 +1,6 @@
 """Finite-state-machine states for Telegram flows."""
 
-from src.telegram.compat import State, StatesGroup
+from aiogram.fsm.state import State, StatesGroup
 
 
 class ClanCreation(StatesGroup):

@@ -20,13 +20,8 @@ from src.shared.value_objects.deck_slots import DeckSlots
 from src.shared.value_objects.image_ref import ImageRef
 from src.shared.value_objects.resource_wallet import ResourceWallet
 from src.shared.value_objects.stat_block import StatBlock
-from src.telegram.compat import (
-    CallbackQuery,
-    FSMContext,
-    Message,
-    TelegramBadRequest,
-    User,
-)
+from aiogram.exceptions import TelegramBadRequest
+
 from src.telegram.callbacks import BattleCallback, CardCallback
 from src.telegram.media_storage import local_media_from_message
 from src.telegram.reply import safe_edit, send_card_preview, send_media_preview
@@ -77,6 +72,7 @@ from src.telegram.ui import (
     shop_markup,
     tops_markup,
 )
+from tests.telegram_fakes import CallbackQuery, FSMContext, Message, User
 
 
 def _button_texts(markup) -> set[str]:

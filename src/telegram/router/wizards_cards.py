@@ -4,7 +4,8 @@ from src.cards.domain.entities import Ability
 from src.shared.errors import DomainError, ValidationError
 from src.shared.enums import CardClass, ProfileBackgroundRarity, Rarity
 from src.shared.value_objects.stat_block import StatBlock
-from src.telegram.compat import FSMContext, Message
+from aiogram.fsm.context import FSMContext
+from aiogram.types import Message
 from src.telegram.media_storage import local_media_from_message
 from src.telegram.router.helpers import _parse_effects, _parse_int
 from src.telegram.router.views import show_admin

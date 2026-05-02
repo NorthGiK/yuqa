@@ -1,9 +1,10 @@
 """Idea browsing and moderation keyboards."""
 
+from aiogram.types import InlineKeyboardMarkup
+
 from src.ideas.domain.entities import Idea
 from src.shared.enums import IdeaStatus
 from src.telegram.callbacks import AdminCallback, IdeaCallback
-from src.telegram.compat import InlineKeyboardMarkup
 from src.telegram.ui.helpers import _markup
 
 

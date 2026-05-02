@@ -3,10 +3,11 @@
 from asyncio import run
 from dataclasses import dataclass
 
+from aiogram import Bot
+
 from src.battles.domain.entities import Battle
 from src.infrastructure.sqlalchemy.migrations import upgrade_head
 from src.telegram.bot import build_bot, build_dispatcher
-from src.telegram.compat import Bot
 from src.telegram.config import Settings
 from src.telegram.services import TelegramServices
 from src.telegram.services.contracts import BattleTimeoutNotifier

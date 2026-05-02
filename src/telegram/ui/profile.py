@@ -1,12 +1,13 @@
 """Profile, clan, leaderboard, and profile-background keyboards."""
 
+from aiogram.types import InlineKeyboardMarkup
+
 from src.telegram.callbacks import (
     ClanCallback,
     MenuCallback,
     ProfileCallback,
     TopCallback,
 )
-from src.telegram.compat import InlineKeyboardMarkup
 from src.telegram.ui.helpers import _markup
 
 

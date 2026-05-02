@@ -2,13 +2,14 @@
 
 from datetime import datetime, timezone
 
+from aiogram.types import Message
+
 from src.players.domain.entities import ProfileBackgroundTemplate
 from src.cards.domain.entities import AbilityEffect
 from src.cards.domain.entities import CardTemplate
 from src.quests.domain.entities import QuestReward
 from src.shared.enums import AbilityStat, AbilityTarget
 from src.shared.errors import ValidationError
-from src.telegram.compat import Message
 
 
 def _parse_int(text: str, label: str, *, positive: bool = False) -> int:

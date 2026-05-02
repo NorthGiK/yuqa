@@ -2,15 +2,11 @@
 
 from src.shared.errors import DomainError, EntityNotFoundError, ValidationError
 from src.shared.enums import Rarity, ResourceType
+from aiogram import Router
+from aiogram.filters import Command, CommandObject
+from aiogram.fsm.context import FSMContext
+from aiogram.types import CallbackQuery, Message
 from src.telegram.callbacks import AdminCallback
-from src.telegram.compat import (
-    CallbackQuery,
-    Command,
-    CommandObject,
-    FSMContext,
-    Message,
-    Router,
-)
 from src.telegram.config import Settings
 from src.telegram.reply import send_notice
 from src.telegram.router.helpers import _parse_int, _profile_backgrounds, _templates

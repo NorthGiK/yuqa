@@ -22,15 +22,10 @@ from src.telegram.callbacks import (
     ShopCallback,
     TopCallback,
 )
-from src.telegram.compat import (
-    CallbackQuery,
-    Command,
-    CommandObject,
-    CommandStart,
-    FSMContext,
-    Message,
-    Router,
-)
+from aiogram import Router
+from aiogram.filters import Command, CommandObject, CommandStart
+from aiogram.fsm.context import FSMContext
+from aiogram.types import CallbackQuery, Message
 from src.telegram.config import Settings
 from src.telegram.services.services import TelegramServices
 from src.telegram.reply import (

@@ -2,7 +2,8 @@
 
 from src.shared.errors import DomainError, ValidationError
 from src.shared.enums import Rarity, ResourceType
-from src.telegram.compat import FSMContext, Message
+from aiogram.fsm.context import FSMContext
+from aiogram.types import Message
 from src.telegram.router.helpers import (
     _parse_dt,
     _parse_int,

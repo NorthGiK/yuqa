@@ -1,6 +1,6 @@
 """Typed callback payloads for inline keyboards."""
 
-from src.telegram.compat import CallbackData
+from aiogram.filters.callback_data import CallbackData
 
 
 class MenuCallback(CallbackData, prefix="menu"):

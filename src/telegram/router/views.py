@@ -2,11 +2,12 @@
 
 from html import escape
 
+from aiogram.types import CallbackQuery, Message
+
 from src.players.domain.entities import ProfileBackgroundTemplate
 from src.cards.domain.entities import PlayerCard
 from src.shared.enums import IdeaStatus
 from src.shared.errors import DomainError, ValidationError
-from src.telegram.compat import CallbackQuery, Message
 from src.telegram.reply import send_card_preview, send_media_preview, send_or_edit
 from src.telegram.router.helpers import (
     _card_image_key,
@@ -77,11 +78,17 @@ from src.telegram.ui import (
 )
 
 
+def _is_callback_query(event: Message | CallbackQuery) -> bool:
+    """Return True for callback-like objects without requiring a concrete class."""
+
+    return getattr(event, "message", None) is not None and hasattr(event, "answer")
+
+
 async def show_home(event, services, player_id: int, *, is_admin: bool = False):
     """Show the main menu."""
 
     player = await services.get_or_create_player(player_id)
-    if isinstance(event, CallbackQuery):
+    if _is_callback_query(event):
         if event.message is not None:
             await event.message.answer(
                 menu_text(player),
@@ -111,7 +118,7 @@ async def show_profile(
         player = await services.get_player(player_id)
         if player is None:
             text = "👤 <b>Профиль</b>\n<i>Игрок с таким ID не найден.</i>"
-            if isinstance(event, CallbackQuery):
+            if _is_callback_query(event):
                 if event.message is not None:
                     await event.message.answer(text, reply_markup=main_menu_markup())
                 return await event.answer()

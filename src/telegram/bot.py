@@ -1,16 +1,13 @@
 """Factory helpers for the Telegram bot runtime."""
 
+from aiogram import BaseMiddleware, Bot, Dispatcher
+from aiogram.client.default import DefaultBotProperties
+from aiogram.enums import ParseMode
+from aiogram.fsm.storage.memory import MemoryStorage
+
 from src.telegram.config import Settings
-from src.telegram.services.services import TelegramServices
-from src.telegram.compat import (
-    BaseMiddleware,
-    Bot,
-    DefaultBotProperties,
-    Dispatcher,
-    MemoryStorage,
-    ParseMode,
-)
 from src.telegram.router import build_router
+from src.telegram.services.services import TelegramServices
 
 
 class ActionRecorderMiddleware(BaseMiddleware):

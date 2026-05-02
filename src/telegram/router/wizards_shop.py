@@ -1,7 +1,8 @@
 """Shop wizard flows for admin content management."""
 
 from src.shared.enums import ResourceType
-from src.telegram.compat import FSMContext, Message
+from aiogram.fsm.context import FSMContext
+from aiogram.types import Message
 from src.telegram.router.helpers import _parse_int
 from src.telegram.states import ShopCreate
 from src.telegram.texts import shop_wizard_text

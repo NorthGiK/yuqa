@@ -1,8 +1,9 @@
 """Card, gallery, and deck-builder keyboards."""
 
+from aiogram.types import InlineKeyboardMarkup
+
 from src.cards.domain.entities import PlayerCard
 from src.telegram.callbacks import CardCallback, DeckCallback
-from src.telegram.compat import InlineKeyboardMarkup
 from src.telegram.ui.helpers import _markup
 
 

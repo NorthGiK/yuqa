@@ -4,7 +4,9 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 
-from src.telegram.compat import CallbackQuery, Message, TelegramBadRequest, User
+from aiogram.exceptions import TelegramBadRequest
+
+from tests.telegram_fakes import CallbackQuery, Message, User
 from src.telegram.reply import safe_edit, send_alert, send_notice
 
 

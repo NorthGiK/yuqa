@@ -4,13 +4,14 @@ from os import getenv
 from pathlib import Path
 from urllib.parse import urlparse
 
-from src.telegram.compat import (
-    CallbackQuery,
-    FSInputFile,
-    InlineKeyboardMarkup,
-    Message,
-    TelegramBadRequest,
-)
+from aiogram.exceptions import TelegramBadRequest
+from aiogram.types import CallbackQuery, FSInputFile, InlineKeyboardMarkup, Message
+
+
+def _is_callback_query(event: Message | CallbackQuery) -> bool:
+    """Return True for callback-like objects without requiring a concrete class."""
+
+    return getattr(event, "message", None) is not None and hasattr(event, "answer")
 
 
 def _markup_signature(markup: object | None) -> tuple:
@@ -85,7 +86,7 @@ async def send_notice(
 ) -> Message | None:
     """Send a visible chat message from a callback flow."""
 
-    if isinstance(event, CallbackQuery):
+    if _is_callback_query(event):
         if event.message is not None:
             # The chat message is the user-facing notice; avoid an extra
             # callback answer so Telegram does not render a transient toast.
@@ -97,7 +98,7 @@ async def send_notice(
 async def send_alert(event: Message | CallbackQuery, text: str) -> Message | None:
     """Show a popup alert for callbacks and fall back to a message otherwise."""
 
-    if isinstance(event, CallbackQuery):
+    if _is_callback_query(event):
         return await event.answer(text, show_alert=True)
     return await event.answer(text)
 
@@ -134,12 +135,12 @@ async def _send_media_with_fallback(
     """Send media when possible and degrade to a text detail screen."""
 
     sender: Message | CallbackQuery
-    if isinstance(event, CallbackQuery) and event.message:
+    if _is_callback_query(event) and event.message:
         sender = event.message
     else:
         sender = event
 
-    if isinstance(event, CallbackQuery):
+    if _is_callback_query(event):
         await event.answer()
     media = _telegram_media(media_key)
     if content_type.startswith("video/") and hasattr(sender, "answer_video"):

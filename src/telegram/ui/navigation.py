@@ -1,7 +1,8 @@
 """Navigation keyboards."""
 
+from aiogram.types import ReplyKeyboardMarkup
+
 from src.telegram.callbacks import MenuCallback
-from src.telegram.compat import ReplyKeyboardMarkup
 from src.telegram.ui.helpers import _markup, _reply_markup
 
 

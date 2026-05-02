@@ -10,7 +10,7 @@ WORKDIR /app
 RUN useradd --create-home --uid 10001 appuser
 
 # copying application
-COPY pyproject.toml README.md main.py alembic.ini .env ./
+COPY pyproject.toml main.py alembic.ini .env ./
 COPY src ./src
 COPY alembic ./alembic
 
@@ -27,4 +27,4 @@ USER appuser
 HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
   CMD python -m src.infrastructure.sqlalchemy.healthcheck || exit 1
 
-CMD ["uv", "run", "yuqa"]
+CMD ["uv", "run", "main.py"]

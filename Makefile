@@ -22,7 +22,7 @@ sync:
 	$(UV) sync --extra dev --extra docker
 
 run:
-	$(UV) run yuqa
+	$(UV) run main.py
 	make clean
 
 test:

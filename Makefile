@@ -56,7 +56,6 @@ agent-summary:
 agent-check:
 	$(UV) run python scripts/agent_audit.py check
 
-
 clean:
 	find src tests -type d -name '__pycache__' -prune -exec rm -rf {} +
 	rm -rf .pytest_cache

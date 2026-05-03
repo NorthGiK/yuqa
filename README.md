@@ -68,11 +68,14 @@ Routers can complete cooldown-based action quests through one service call:
 
 ```python
 await services.complete_action_quest(
+    quest=QuestDefinition(
+        id=101,
+        period=QuestPeriod.DAILY,
+        action_type=QuestActionType.CARD_LEVEL_UP,
+        reward=QuestReward(coins=25),
+        cooldown=timedelta(hours=2),
+    ),
     player_id=telegram_id,
-    quest_id=101,
-    action_type=QuestActionType.CARD_LEVEL_UP,
-    reward=QuestReward(coins=25),
-    cooldown=timedelta(hours=2),
 )
 ```
 
@@ -95,6 +98,21 @@ make agent-check
 - `docs/ai-agents.md` provides the shortest path to the correct modules for
   runtime, transport, domain, and persistence work in the current package
   layout.
+
+## Stress testing
+
+Run a local randomized service-level stress simulation with:
+
+```bash
+make stress
+make stress STRESS_ARGS="--players 100 --operations-per-player 200 --concurrency 50"
+```
+
+The harness in `scripts/stress_app.py` creates a temporary SQLite database,
+seeds catalog content, simulates many concurrent players across profile,
+economy, collection, quest, idea, and battle flows, and prints JSON metrics for
+latency, throughput, expected domain-rule rejections, failures, CPU time, and
+memory. Pass `--database-url` when you want to measure a specific database.
 
 ## Persistence model
 

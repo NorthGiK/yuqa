@@ -2,7 +2,7 @@
 UV_CACHE_DIR ?= $(CURDIR)/.cache/uv
 UV := env UV_CACHE_DIR=$(UV_CACHE_DIR) uv
 
-.PHONY: help sync run test test-file format lint clean db-upgrade docker-build agent-summary agent-check
+.PHONY: help sync run test test-file stress format lint clean db-upgrade docker-build agent-summary agent-check
 
 help:
 	@echo "Targets:"
@@ -10,6 +10,7 @@ help:
 	@echo "  make run        - run the Telegram bot"
 	@echo "  make test       - run all tests"
 	@echo "  make test-file FILE=tests/test_shop.py - run one test file"
+	@echo "  make stress     - run a local randomized service stress simulation"
 	@echo "  make lint       - run Ruff checks"
 	@echo "  make format     - format Python files with Ruff"
 	@echo "  make db-upgrade - apply Alembic migrations"
@@ -33,6 +34,9 @@ test-file:
 	@test -n "$(FILE)" || (echo "Usage: make test-file FILE=tests/test_shop.py" && exit 1)
 	$(UV) run pytest -q "$(FILE)"
 	make clean
+
+stress:
+	$(UV) run python scripts/stress_app.py $(STRESS_ARGS)
 
 docker-build:
 	docker build -t yuqa:latest ./

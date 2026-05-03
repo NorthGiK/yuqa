@@ -70,11 +70,14 @@ SQLAlchemy.
 
 ```python
 await services.complete_action_quest(
+    quest=QuestDefinition(
+        id=101,
+        period=QuestPeriod.DAILY,
+        action_type=QuestActionType.CARD_LEVEL_UP,
+        reward=QuestReward(coins=25),
+        cooldown=timedelta(hours=2),
+    ),
     player_id=telegram_id,
-    quest_id=101,
-    action_type=QuestActionType.CARD_LEVEL_UP,
-    reward=QuestReward(coins=25),
-    cooldown=timedelta(hours=2),
 )
 ```
 
@@ -96,6 +99,22 @@ make agent-check
   начали зависеть от Telegram или адаптеров хранения.
 - `docs/ai-agents.md` даёт самый короткий путь к нужным модулям для runtime,
   transport, domain и persistence задач в текущей структуре пакетов.
+
+## Стресс-тестирование
+
+Локальную рандомизированную симуляцию на уровне сервисов можно запустить так:
+
+```bash
+make stress
+make stress STRESS_ARGS="--players 100 --operations-per-player 200 --concurrency 50"
+```
+
+Скрипт `scripts/stress_app.py` создаёт временную SQLite-базу, наполняет каталог
+тестовым контентом, симулирует множество одновременных игроков в профильных,
+экономических, коллекционных, квестовых, идейных и боевых сценариях, а затем
+выводит JSON-метрики по latency, throughput, ожидаемым domain-rule отказам,
+ошибкам, CPU time и памяти. Передайте `--database-url`, если нужно измерить
+конкретную базу данных.
 
 ## Модель хранения
 

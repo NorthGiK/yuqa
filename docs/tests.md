@@ -27,6 +27,23 @@ Tests are organized by behavior rather than by package mirroring. Use the file w
 ## Tooling Tests
 - `test_agent_audit.py`
 
+## Stress Tests
+The local stress harness drives the same service layer used by Telegram
+handlers. It does not call Telegram APIs, so it can run without a bot token.
+The harness seeds a temporary SQLite database, creates many players, runs
+randomized profile, economy, collection, quest, idea, and battle actions, and
+prints JSON metrics for throughput, latency percentiles, domain-rule
+rejections, failures, CPU time, and memory.
+
+```bash
+make stress
+make stress STRESS_ARGS="--players 100 --operations-per-player 200 --concurrency 50"
+uv run python scripts/stress_app.py --players 100 --operations-per-player 200 --concurrency 50
+```
+
+Use `--database-url` to stress a specific SQLAlchemy database URL instead of
+the default temporary SQLite database.
+
 ## Focused Loops
 - `make test-file FILE=tests/test_telegram_layer.py`
 - `make test-file FILE=tests/test_telegram_services.py`

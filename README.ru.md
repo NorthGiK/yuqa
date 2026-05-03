@@ -137,13 +137,17 @@ make stress STRESS_ARGS="--players 100 --operations-per-player 200 --concurrency
 ## Docker-развертывание
 
 ```bash
-docker build -t yuqa:latest .
+docker build -f docker/Dockerfile -t yuqa:latest .
 ```
 
 Контейнерный образ копирует исходники приложения, запускает `uv sync` во время
-сборки и стартует бота через `uv run yuqa`. Если вам нужно постоянное
-состояние вне контейнера, подключите `/data` как volume и храните SQLite-базу
-там.
+сборки и стартует бота через `uv run yuqa`. Образ собран для работы с
+PostgreSQL, поэтому при запуске задайте `DATABASE_URL` с PostgreSQL-строкой
+подключения. Если вам нужно постоянное состояние вне контейнера, подключайте
+`/data` только для каталога или локальных экспериментов.
+
+Для продакшена используйте `docker/compose.yaml`: он поднимает бота и
+PostgreSQL вместе.
 
 ## GitLab CI/CD
 

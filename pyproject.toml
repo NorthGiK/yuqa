@@ -12,10 +12,10 @@ dependencies = [
 
 [project.optional-dependencies]
 docker = [
-  "aiosqlite>=0.22.1",
+  "psycopg2-binary>=2.9.11",
 ]
 production = [
-  "psycopg2>=2.9.11",
+  "psycopg2-binary>=2.9.11",
 ]
 dev = [
   "pytest>=9.0.3",

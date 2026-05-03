@@ -146,6 +146,10 @@ Current feature packages:
   and health checks
 - `sqlalchemy/models/`: ORM table definitions split by feature area
 
+### `docker/`
+- `docker/Dockerfile`: production bot image
+- `compose.yaml`: production bot + PostgreSQL stack
+
 ## Storage Model
 The bot can run in three modes:
 

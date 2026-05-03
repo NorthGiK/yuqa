@@ -9,22 +9,18 @@ WORKDIR /app
 
 RUN useradd --create-home --uid 10001 appuser
 
-# copying application
-COPY pyproject.toml main.py alembic.ini .env ./
+COPY pyproject.toml main.py alembic.ini ./
 COPY src ./src
 COPY alembic ./alembic
 
-# installing uv
-COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
-
-# install dependencies
-RUN /bin/uv sync --no-cache --extra docker
-
 RUN mkdir -p /data && chown -R appuser:appuser /app /data
+
+COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
+RUN /bin/uv sync --no-cache --extra production
 
 USER appuser
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
-  CMD python -m src.infrastructure.sqlalchemy.healthcheck || exit 1
+	CMD python -m src.infrastructure.sqlalchemy.healthcheck || exit 1
 
 CMD ["uv", "run", "main.py"]

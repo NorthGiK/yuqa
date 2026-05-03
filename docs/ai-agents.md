@@ -182,3 +182,4 @@ Before expanding those files, confirm the logic cannot live in:
 - `docs/tests.md`: test inventory and where to add coverage.
 - `make stress`: local randomized service-level stress harness for the
   database-backed runtime.
+- `docker/compose.yaml`: production bot and PostgreSQL deployment stack.

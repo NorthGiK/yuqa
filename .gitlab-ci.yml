@@ -40,7 +40,7 @@ build-image:
     DOCKER_TLS_CERTDIR: ""
   script:
     - echo "$CI_REGISTRY_PASSWORD" | docker login "$CI_REGISTRY" -u "$CI_REGISTRY_USER" --password-stdin
-    - docker build --pull -t "$CI_REGISTRY_IMAGE:$CI_COMMIT_SHA" -t "$CI_REGISTRY_IMAGE:latest" .
+    - docker build --pull -f docker/Dockerfile -t "$CI_REGISTRY_IMAGE:$CI_COMMIT_SHA" -t "$CI_REGISTRY_IMAGE:latest" .
     - docker push "$CI_REGISTRY_IMAGE:$CI_COMMIT_SHA"
     - docker push "$CI_REGISTRY_IMAGE:latest"
   rules:
@@ -61,15 +61,16 @@ deploy-production:
     - printf '%s\n' "$DEPLOY_ENV_FILE" > deploy.env
   script:
     - ssh "$DEPLOY_USER@$DEPLOY_HOST" "mkdir -p '$DEPLOY_PATH'"
-    - scp compose.yaml "$DEPLOY_USER@$DEPLOY_HOST:$DEPLOY_PATH/compose.yaml"
+    - ssh "$DEPLOY_USER@$DEPLOY_HOST" "mkdir -p '$DEPLOY_PATH/docker'"
+    - scp docker/compose.yaml "$DEPLOY_USER@$DEPLOY_HOST:$DEPLOY_PATH/docker/compose.yaml"
     - scp deploy.env "$DEPLOY_USER@$DEPLOY_HOST:$DEPLOY_PATH/.env"
     - >
       ssh "$DEPLOY_USER@$DEPLOY_HOST"
       "cd '$DEPLOY_PATH'
       && export YUQA_IMAGE='$CI_REGISTRY_IMAGE:$CI_COMMIT_SHA'
       && docker login '$CI_REGISTRY' -u '$CI_REGISTRY_USER' -p '$CI_REGISTRY_PASSWORD'
-      && docker compose pull bot
-      && docker compose up -d --wait bot"
+      && docker compose -f docker/compose.yaml pull bot
+      && docker compose -f docker/compose.yaml up -d --wait bot"
   environment:
     name: production
   rules:

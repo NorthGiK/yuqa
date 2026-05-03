@@ -134,12 +134,17 @@ memory. Pass `--database-url` when you want to measure a specific database.
 ## Docker deployment
 
 ```bash
-docker build -t yuqa:latest .
+docker build -f docker/Dockerfile -t yuqa:latest .
 ```
 
 The container image copies the application source, runs `uv sync` during build,
-and starts the bot with `uv run yuqa`. If you want persistent state outside the
-container, mount `/data` into the container and keep the SQLite database there.
+and starts the bot with `uv run yuqa`. The image is built for PostgreSQL use, so
+set `DATABASE_URL` to a PostgreSQL connection string when running it. If you
+want persistent state outside the container, mount `/data` only for catalog
+artifacts or local experiments.
+
+Production deploys should use `docker/compose.yaml`, which starts the bot and a
+PostgreSQL service together.
 
 ## GitLab CI/CD
 

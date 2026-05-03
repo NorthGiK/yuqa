@@ -38,9 +38,8 @@ test-file:
 stress:
 	$(UV) run python scripts/stress_app.py $(STRESS_ARGS)
 
-docker-build: docker-build
-	docker build -t yuqa:latest ./
-	docker run -d yuqa:latest 
+docker-build:
+	docker build -f docker/Dockerfile -t yuqa:latest ./
 
 lint:
 	$(UV) run ruff check src tests main.py

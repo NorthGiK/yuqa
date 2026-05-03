@@ -34,6 +34,8 @@ The harness seeds a temporary SQLite database, creates many players, runs
 randomized profile, economy, collection, quest, idea, and battle actions, and
 prints JSON metrics for throughput, latency percentiles, domain-rule
 rejections, failures, CPU time, and memory.
+It is useful for checking how the relational repository layer behaves under
+concurrent writes.
 
 ```bash
 make stress

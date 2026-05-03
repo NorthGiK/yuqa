@@ -355,4 +355,7 @@ class TelegramServices(
     def _persist_runtime_state(self) -> None:
         """Flush runtime state to the backing store."""
 
-        self.store.save()
+        if hasattr(self.store, "save_runtime_state"):
+            self.store.save_runtime_state()
+        else:
+            self.store.save()

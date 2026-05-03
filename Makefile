@@ -38,18 +38,15 @@ test-file:
 stress:
 	$(UV) run python scripts/stress_app.py $(STRESS_ARGS)
 
-docker-build:
+docker-build: docker-build
 	docker build -t yuqa:latest ./
-
-docker-run: docker-build
-	docker run -d yuqa:latest
+	docker run -d yuqa:latest 
 
 lint:
 	$(UV) run ruff check src tests main.py
 
 format:
 	$(UV) run ruff format src tests main.py
-
 
 db-upgrade:
 	$(UV) run alembic upgrade head

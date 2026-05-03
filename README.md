@@ -116,6 +116,9 @@ memory. Pass `--database-url` when you want to measure a specific database.
 
 ## Persistence model
 
+- SQLAlchemy repositories use per-aggregate relational tables instead of a
+  single application-state JSON document. The relational migration copies old
+  `state_documents` data into the new tables and then drops the legacy table.
 - Static catalog data from `data/yuqa/catalog.json` is imported into the
   database on the first boot.
 - Runtime state such as players, cards, clans, finished battle results, and

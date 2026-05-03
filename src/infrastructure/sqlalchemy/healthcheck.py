@@ -21,7 +21,7 @@ def _default_database_url() -> str:
 
 
 def main() -> int:
-    """Check that the database is reachable and the document table exists."""
+    """Check that the database is reachable and relational tables exist."""
 
     database_url = getenv("DATABASE_URL", "").strip() or _default_database_url()
     engine = create_sync_engine(database_url)
@@ -29,7 +29,7 @@ def main() -> int:
         with engine.connect() as connection:
             connection.execute(text("SELECT 1"))
             connection.execute(
-                text("SELECT 1 FROM state_documents LIMIT 1")
+                text("SELECT 1 FROM players LIMIT 1")
             ).scalar_one_or_none()
     except SQLAlchemyError:
         return 1

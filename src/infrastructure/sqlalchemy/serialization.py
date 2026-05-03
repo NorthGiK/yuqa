@@ -1,4 +1,4 @@
-"""Serialization helpers for the persistent document store."""
+"""Payload codecs shared by relational persistence and legacy imports."""
 
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
@@ -48,7 +48,7 @@ from src.shared.value_objects.resource_wallet import ResourceWallet
 
 @dataclass(frozen=True, slots=True)
 class SectionCodec:
-    """Encode and decode one named document."""
+    """Encode and decode one persisted section payload."""
 
     dump: Callable[[Any], Any]
     load: Callable[[Any], Any]

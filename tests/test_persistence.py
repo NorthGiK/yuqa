@@ -1,10 +1,13 @@
 """Persistence tests for the database-backed runtime."""
 
+import json
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
+from alembic import command
 import pytest
 
+from src.infrastructure.sqlalchemy.migrations import alembic_config
 from src.quests import QuestDefinition, QuestPeriod
 from src.cards.domain.entities import Ability
 from src.cards.domain.entities import PlayerCard
@@ -23,6 +26,8 @@ from src.shared.enums import (
 )
 from src.shared.value_objects.deck_slots import DeckSlots
 from src.shared.value_objects.stat_block import StatBlock
+from src.infrastructure.sqlalchemy.serialization import SECTION_CODECS
+from src.players.domain.entities import Player
 from src.telegram.services.services import TelegramServices
 
 
@@ -56,12 +61,43 @@ def test_migrations_accept_async_sqlite_url(tmp_path: Path) -> None:
     try:
         with engine.connect() as connection:
             rows = connection.exec_driver_sql(
+                "SELECT name FROM sqlite_master WHERE name = 'players'"
+            ).all()
+            legacy_rows = connection.exec_driver_sql(
                 "SELECT name FROM sqlite_master WHERE name = 'state_documents'"
             ).all()
     finally:
         engine.dispose()
 
-    assert rows == [("state_documents",)]
+    assert rows == [("players",)]
+    assert legacy_rows == []
+
+
+def test_migrations_copy_legacy_state_documents(tmp_path: Path) -> None:
+    """The relational migration should preserve old document-store players."""
+
+    database_url = _sqlite_url(tmp_path / "yuqa.db")
+    command.upgrade(alembic_config(database_url), "20260411_0001")
+    engine = create_sync_engine(database_url)
+    try:
+        payload = SECTION_CODECS["players"].dump(
+            {1: Player(telegram_id=1, rating=123)}
+        )
+        with engine.begin() as connection:
+            connection.exec_driver_sql(
+                "INSERT INTO state_documents (name, payload) VALUES (?, ?)",
+                ("players", json.dumps(payload)),
+            )
+    finally:
+        engine.dispose()
+
+    upgrade_head(database_url)
+    services = TelegramServices(database_url=database_url)
+    try:
+        player = services.players.items[1]
+        assert player.rating == 123
+    finally:
+        services.store.close()
 
 
 @pytest.mark.asyncio

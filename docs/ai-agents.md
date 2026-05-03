@@ -65,6 +65,9 @@
   JSON-backed catalog content with temporary SQLite-backed runtime state.
 - `TelegramServices(content_path=..., database_url=...)`:
   persistent database-backed runtime with Alembic migrations.
+- The relational database mode stores aggregate rows in per-feature tables
+  rather than one JSON blob, and the `20260503_0002` migration handles legacy
+  `state_documents` imports.
 - Quest definitions and per-player quest cooldowns are part of persisted runtime
   state.
 
@@ -177,3 +180,5 @@ Before expanding those files, confirm the logic cannot live in:
 - `README.md`: main English overview for players and developers.
 - `README.ru.md`: Russian localization of the main overview.
 - `docs/tests.md`: test inventory and where to add coverage.
+- `make stress`: local randomized service-level stress harness for the
+  database-backed runtime.

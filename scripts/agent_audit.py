@@ -499,7 +499,7 @@ def build_summary() -> dict[str, object]:
             {
                 "mode": "temporary_sqlite",
                 "trigger": "TelegramServices()",
-                "notes": "Uses an isolated temporary SQLite document store.",
+                "notes": "Uses an isolated temporary SQLite relational store.",
             },
             {
                 "mode": "catalog",
@@ -509,7 +509,7 @@ def build_summary() -> dict[str, object]:
             {
                 "mode": "database",
                 "trigger": "TelegramServices(content_path=..., database_url=...)",
-                "notes": "Uses PersistentStateStore and Alembic-managed schema.",
+                "notes": "Uses relational SQLAlchemy repositories and Alembic-managed schema.",
             },
         ],
         "recommended_start_points": {

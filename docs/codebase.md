@@ -150,7 +150,7 @@ The bot can run in three modes:
 
 ### Temporary SQLite
 - Constructed with `TelegramServices()`
-- Uses an isolated SQLite document store for tests and isolated service
+- Uses an isolated SQLite relational store for tests and isolated service
   experiments
 
 ### Catalog / Local JSON
@@ -161,10 +161,16 @@ The bot can run in three modes:
 ### Database
 - Constructed with `TelegramServices(content_path=..., database_url=...)`
 - Uses SQLAlchemy repositories and Alembic migrations
+- Runtime and catalog aggregates are stored in relational tables.
+- The `20260503_0002` migration copies legacy `state_documents` payloads into
+  those tables and removes the old document table.
 - Default `DATABASE_URL` falls back to SQLite inside `YUQA_DATA_DIR`
 - Active battles and matchmaking queues are cleared on startup; deck drafts and
   finished player progress persist.
 - Quest definitions and per-player quest cooldowns persist with runtime state.
+- The `scripts/stress_app.py` harness can be used to simulate concurrent
+  players against this storage mode and report latency, throughput, CPU, and
+  memory usage.
 
 ## Where Logic Should Live
 

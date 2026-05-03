@@ -1,16 +1,14 @@
 """Quest completion helpers for TelegramServices."""
 
-from datetime import datetime, timedelta
+from datetime import datetime
 
 from src.quests import (
     QuestService,
     QuestCompletionResult,
     QuestDefinition,
     QuestProgress,
-    QuestReward,
     aware_utc,
 )
-from src.shared.enums import QuestActionType, QuestPeriod
 from src.shared.errors import ValidationError
 from src.telegram.services.contracts import TelegramServiceContext
 

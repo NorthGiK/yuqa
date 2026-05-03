@@ -359,7 +359,7 @@ def _module_groups() -> dict[str, list[str]]:
         "storage": [
             "src/infrastructure/local.py",
             "src/infrastructure/sqlalchemy/repositories.py",
-            "src/infrastructure/sqlalchemy/models.py",
+            "src/infrastructure/sqlalchemy/models/__init__.py",
         ],
         "agent_docs": [
             "AGENTS.md",
@@ -417,7 +417,7 @@ def _change_playbooks() -> dict[str, list[str]]:
         ],
         "persistence_bug": [
             "src/infrastructure/sqlalchemy/repositories.py",
-            "src/infrastructure/sqlalchemy/models.py",
+            "src/infrastructure/sqlalchemy/models/__init__.py",
             "tests/test_persistence.py",
         ],
     }

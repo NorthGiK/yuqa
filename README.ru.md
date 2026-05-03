@@ -118,6 +118,8 @@ make stress STRESS_ARGS="--players 100 --operations-per-player 200 --concurrency
 
 ## Модель хранения
 
+- ORM-таблицы распределены по `src/infrastructure/sqlalchemy/models/`, а не
+  собраны в одном плоском модуле.
 - SQLAlchemy-репозитории используют отдельные relational-таблицы для агрегатов,
   а не один JSON-документ со всем состоянием приложения. Миграция переносит
   старые данные из `state_documents` в новые таблицы и затем удаляет legacy

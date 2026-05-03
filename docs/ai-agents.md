@@ -120,7 +120,7 @@ Open:
 ### Persistence Bug
 Open:
 1. `src/infrastructure/sqlalchemy/repositories.py`
-2. `src/infrastructure/sqlalchemy/models.py`
+2. `src/infrastructure/sqlalchemy/models/__init__.py`
 3. `src/infrastructure/local.py`
 4. `tests/test_persistence.py`
 

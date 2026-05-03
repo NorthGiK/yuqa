@@ -116,6 +116,8 @@ memory. Pass `--database-url` when you want to measure a specific database.
 
 ## Persistence model
 
+- ORM tables are split across `src/infrastructure/sqlalchemy/models/` instead
+  of living in one flat module.
 - SQLAlchemy repositories use per-aggregate relational tables instead of a
   single application-state JSON document. The relational migration copies old
   `state_documents` data into the new tables and then drops the legacy table.

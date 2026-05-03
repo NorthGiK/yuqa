@@ -144,6 +144,7 @@ Current feature packages:
 - `local.py`: JSON-backed catalog persistence and shared serializers
 - `sqlalchemy/`: SQLAlchemy models, repositories, serialization, migrations,
   and health checks
+- `sqlalchemy/models/`: ORM table definitions split by feature area
 
 ## Storage Model
 The bot can run in three modes:
@@ -260,6 +261,7 @@ feature-level services when the change is cohesive enough.
 3. `src/telegram/services/__init__.py`
 4. `src/telegram/services/services.py`
 5. `src/telegram/services/contracts.py`
+6. `src/infrastructure/sqlalchemy/models/__init__.py`
 
 ### If you are debugging a callback or command
 1. `src/telegram/router/__init__.py`
@@ -276,7 +278,7 @@ feature-level services when the change is cohesive enough.
 
 ### If you are debugging persistence
 1. `src/infrastructure/sqlalchemy/repositories.py`
-2. `src/infrastructure/sqlalchemy/models.py`
+2. `src/infrastructure/sqlalchemy/models/__init__.py`
 3. `tests/test_persistence.py`
 
 ### If you are adding a feature rule

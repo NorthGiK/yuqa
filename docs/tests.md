@@ -37,6 +37,10 @@ rejections, failures, CPU time, and memory.
 It is useful for checking how the relational repository layer behaves under
 concurrent writes.
 
+For persistence regressions, add focused tests for both the success path and
+the rollback path. The current suite includes coverage for transactional
+service writes and quest cooldown idempotency.
+
 ```bash
 make stress
 make stress STRESS_ARGS="--players 100 --operations-per-player 200 --concurrency 50"

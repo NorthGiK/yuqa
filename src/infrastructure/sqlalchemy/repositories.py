@@ -1,5 +1,9 @@
 """Persistent repositories backed by relational SQLAlchemy tables."""
 
+from collections.abc import Iterator
+from contextlib import contextmanager
+from copy import deepcopy
+from dataclasses import FrozenInstanceError, fields, is_dataclass
 import json
 from pathlib import Path
 from typing import Any, Generic, TypeVar
@@ -52,6 +56,43 @@ from src.shop.domain.entities import ShopItem
 
 RepositoryKey = int | tuple[int, int]
 T = TypeVar("T")
+_StateSnapshot = dict[str, Any]
+_TransactionItemKey = tuple[str, RepositoryKey]
+
+_STATE_SECTIONS = (
+    "players",
+    "player_cards",
+    "cards",
+    "profile_backgrounds",
+    "clans",
+    "banners",
+    "shop_items",
+    "battle_pass_seasons",
+    "premium_battle_pass_seasons",
+    "battle_pass_progress",
+    "premium_battle_pass_progress",
+    "quest_definitions",
+    "quest_progress",
+    "battles",
+    "ideas",
+    "standard_cards",
+    "universes",
+    "free_rewards",
+    "search_queue",
+    "deck_drafts",
+    "action_events",
+)
+
+
+class _PendingTransaction:
+    """Collect row changes until a service operation reaches its commit point."""
+
+    def __init__(self, snapshot: _StateSnapshot) -> None:
+        self.snapshot = snapshot
+        self.writes: dict[_TransactionItemKey, object] = {}
+        self.deletes: set[_TransactionItemKey] = set()
+        self.runtime_dirty = False
+        self.full_save = False
 
 
 def create_sync_engine(database_url: str) -> Engine:
@@ -121,6 +162,8 @@ class PersistentStateStore:
         self.search_queue: dict[int, int] = {}
         self.deck_drafts: dict[int, list[int]] = {}
         self.action_events: list[tuple[int, str]] = []
+        self._transaction: _PendingTransaction | None = None
+        self._transaction_depth = 0
 
         self.load()
         if self._is_empty() and self._import_legacy_documents_if_needed():
@@ -241,64 +284,20 @@ class PersistentStateStore:
     def save(self) -> None:
         """Persist every loaded section into relational tables."""
 
+        if self._transaction is not None:
+            self._transaction.full_save = True
+            return
+
         with Session(self.engine) as session:
-            self._replace_mapping(session, "players", PlayerORM, self.players)
-            self._replace_mapping(
-                session, "player_cards", PlayerCardORM, self.player_cards
-            )
-            self._replace_mapping(session, "cards", CardTemplateORM, self.cards)
-            self._replace_mapping(
-                session,
-                "profile_backgrounds",
-                ProfileBackgroundORM,
-                self.profile_backgrounds,
-            )
-            self._replace_mapping(session, "clans", ClanORM, self.clans)
-            self._replace_mapping(session, "banners", BannerORM, self.banners)
-            self._replace_mapping(session, "shop_items", ShopItemORM, self.shop_items)
-            self._replace_mapping(session, "ideas", IdeaORM, self.ideas)
-            self._replace_mapping(
-                session,
-                "battle_pass_seasons",
-                BattlePassSeasonORM,
-                self.battle_pass_seasons,
-            )
-            self._replace_mapping(
-                session,
-                "premium_battle_pass_seasons",
-                PremiumBattlePassSeasonORM,
-                self.premium_battle_pass_seasons,
-            )
-            self._replace_mapping(
-                session,
-                "battle_pass_progress",
-                BattlePassProgressORM,
-                self.battle_pass_progress,
-            )
-            self._replace_mapping(
-                session,
-                "premium_battle_pass_progress",
-                PremiumBattlePassProgressORM,
-                self.premium_battle_pass_progress,
-            )
-            self._replace_mapping(
-                session,
-                "quest_definitions",
-                QuestDefinitionORM,
-                self.quest_definitions,
-            )
-            self._replace_mapping(
-                session,
-                "quest_progress",
-                QuestProgressORM,
-                self.quest_progress,
-            )
-            self._replace_mapping(session, "battles", BattleORM, self.battles)
-            self._replace_runtime_tables(session)
+            self._replace_all_tables(session)
             session.commit()
 
     def save_runtime_state(self) -> None:
         """Persist runtime-only dict/list tables without rewriting aggregates."""
+
+        if self._transaction is not None:
+            self._transaction.runtime_dirty = True
+            return
 
         with Session(self.engine) as session:
             self._replace_runtime_tables(session)
@@ -307,12 +306,24 @@ class PersistentStateStore:
     def save_item(self, section: str, key: RepositoryKey, item: object) -> None:
         """Upsert one aggregate row."""
 
+        if self._transaction is not None:
+            item_key = (section, key)
+            self._transaction.deletes.discard(item_key)
+            self._transaction.writes[item_key] = item
+            return
+
         with Session(self.engine) as session:
             session.merge(self._row_for_item(section, key, item))
             session.commit()
 
     def delete_item(self, section: str, key: RepositoryKey) -> None:
         """Delete one aggregate row."""
+
+        if self._transaction is not None:
+            item_key = (section, key)
+            self._transaction.writes.pop(item_key, None)
+            self._transaction.deletes.add(item_key)
+            return
 
         model = self._model_for_section(section)
         with Session(self.engine) as session:
@@ -326,11 +337,106 @@ class PersistentStateStore:
 
         self.engine.dispose()
 
+    @contextmanager
+    def transaction(self) -> Iterator[None]:
+        """Commit staged repository writes atomically.
+
+        Service methods mutate domain objects before repositories persist them.
+        The snapshot lets failed operations roll those in-memory objects back to
+        the same state as the database transaction.
+        """
+
+        if self._transaction is not None:
+            self._transaction_depth += 1
+            try:
+                yield
+            finally:
+                self._transaction_depth -= 1
+            return
+
+        transaction = _PendingTransaction(self._snapshot_state())
+        self._transaction = transaction
+        self._transaction_depth = 1
+        try:
+            yield
+            self._commit_transaction(transaction)
+        except Exception:
+            self._restore_state(transaction.snapshot)
+            raise
+        finally:
+            self._transaction = None
+            self._transaction_depth = 0
+
     def next_id(self, section: str) -> int:
         """Return the next numeric identifier for one mapping section."""
 
         items = getattr(self, section)
         return max(items, default=0) + 1
+
+    def _snapshot_state(self) -> _StateSnapshot:
+        """Copy the service-facing state for rollback on transaction failure."""
+
+        return {section: deepcopy(getattr(self, section)) for section in _STATE_SECTIONS}
+
+    def _restore_state(self, snapshot: _StateSnapshot) -> None:
+        """Restore state in place so existing repository references stay valid."""
+
+        for section, previous in snapshot.items():
+            current = getattr(self, section)
+            restored = self._restore_value(current, previous)
+            if restored is not current:
+                setattr(self, section, restored)
+
+    def _restore_value(self, current: Any, previous: Any) -> Any:
+        """Restore one object while preserving references when it is practical."""
+
+        if isinstance(current, dict) and isinstance(previous, dict):
+            for key in list(current):
+                if key not in previous:
+                    del current[key]
+            for key, previous_value in previous.items():
+                if key in current:
+                    current[key] = self._restore_value(current[key], previous_value)
+                else:
+                    current[key] = previous_value
+            return current
+        if isinstance(current, list) and isinstance(previous, list):
+            current[:] = previous
+            return current
+        if type(current) is type(previous) and is_dataclass(current):
+            try:
+                for field in fields(current):
+                    setattr(current, field.name, deepcopy(getattr(previous, field.name)))
+            except FrozenInstanceError:
+                return previous
+            return current
+        return previous
+
+    def _commit_transaction(self, transaction: _PendingTransaction) -> None:
+        """Write all staged transaction changes in one database commit."""
+
+        if (
+            not transaction.full_save
+            and not transaction.writes
+            and not transaction.deletes
+            and not transaction.runtime_dirty
+        ):
+            return
+
+        with Session(self.engine) as session:
+            if transaction.full_save:
+                self._replace_all_tables(session)
+            else:
+                for section, key in transaction.deletes:
+                    model = self._model_for_section(section)
+                    row = session.get(model, key)
+                    if row is not None:
+                        session.delete(row)
+                for (section, key), item in transaction.writes.items():
+                    session.merge(self._row_for_item(section, key, item))
+                if transaction.runtime_dirty:
+                    self._replace_runtime_tables(session)
+            session.commit()
 
     def _is_empty(self) -> bool:
         """Return True when no relational data has been loaded."""
@@ -414,6 +520,61 @@ class PersistentStateStore:
 
         payload = {key(row): row.payload for row in session.scalars(select(model))}
         return SECTION_CODECS[section].load(payload)
+
+    def _replace_all_tables(self, session: Session) -> None:
+        """Replace every persisted table from the loaded state."""
+
+        self._replace_mapping(session, "players", PlayerORM, self.players)
+        self._replace_mapping(session, "player_cards", PlayerCardORM, self.player_cards)
+        self._replace_mapping(session, "cards", CardTemplateORM, self.cards)
+        self._replace_mapping(
+            session,
+            "profile_backgrounds",
+            ProfileBackgroundORM,
+            self.profile_backgrounds,
+        )
+        self._replace_mapping(session, "clans", ClanORM, self.clans)
+        self._replace_mapping(session, "banners", BannerORM, self.banners)
+        self._replace_mapping(session, "shop_items", ShopItemORM, self.shop_items)
+        self._replace_mapping(session, "ideas", IdeaORM, self.ideas)
+        self._replace_mapping(
+            session,
+            "battle_pass_seasons",
+            BattlePassSeasonORM,
+            self.battle_pass_seasons,
+        )
+        self._replace_mapping(
+            session,
+            "premium_battle_pass_seasons",
+            PremiumBattlePassSeasonORM,
+            self.premium_battle_pass_seasons,
+        )
+        self._replace_mapping(
+            session,
+            "battle_pass_progress",
+            BattlePassProgressORM,
+            self.battle_pass_progress,
+        )
+        self._replace_mapping(
+            session,
+            "premium_battle_pass_progress",
+            PremiumBattlePassProgressORM,
+            self.premium_battle_pass_progress,
+        )
+        self._replace_mapping(
+            session,
+            "quest_definitions",
+            QuestDefinitionORM,
+            self.quest_definitions,
+        )
+        self._replace_mapping(
+            session,
+            "quest_progress",
+            QuestProgressORM,
+            self.quest_progress,
+        )
+        self._replace_mapping(session, "battles", BattleORM, self.battles)
+        self._replace_runtime_tables(session)
 
     def _replace_mapping(
         self,

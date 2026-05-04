@@ -23,30 +23,34 @@ class QuestServiceMixin(TelegramServiceContext, QuestService):
         now: datetime | None = None,
     ) -> QuestCompletionResult:
         """Complete an action quest when the player's cooldown has expired."""
-        
-        if quest.cooldown.total_seconds() < 0:
-            raise ValidationError("quest cooldown must be >= 0")
-        
-        moment = aware_utc(now)
-        player = await self.get_or_create_player(player_id)
-        await self.quests.save_definition(quest)
-        
-        progress = await self.quests.get_progress(player.telegram_id, quest.id)
-        if progress is None:
-            progress = QuestProgress(player_id=player.telegram_id, quest_id=quest.id)
-        
-        result = self.quest_service.complete_if_ready(
-            player,
-            quest,
-            progress,
-            completed_at=moment,
-        )
-        if not result.completed:
+
+        async with self.write_transaction():
+            if quest.cooldown.total_seconds() < 0:
+                raise ValidationError("quest cooldown must be >= 0")
+
+            moment = aware_utc(now)
+            player = await self.get_or_create_player(player_id)
+            await self.quests.save_definition(quest)
+
+            progress = await self.quests.get_progress(player.telegram_id, quest.id)
+            if progress is None:
+                progress = QuestProgress(
+                    player_id=player.telegram_id,
+                    quest_id=quest.id,
+                )
+
+            result = self.quest_service.complete_if_ready(
+                player,
+                quest,
+                progress,
+                completed_at=moment,
+            )
+            if not result.completed:
+                return result
+
+            await self.players.save(player)
+            await self.quests.save_progress(progress)
             return result
-        
-        await self.players.save(player)
-        await self.quests.save_progress(progress)
-        return result
 
 
 __all__ = ["QuestServiceMixin"]

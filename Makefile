@@ -40,6 +40,7 @@ stress:
 
 docker-build:
 	docker build -f docker/Dockerfile -t yuqa:latest ./
+	docker run yuqa:latest
 
 lint:
 	$(UV) run ruff check src tests main.py

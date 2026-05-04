@@ -172,12 +172,13 @@ async def test_quest_decorator_uses_persistent_completion_helper() -> None:
     class _Services:
         async def complete_action_quest(self, **kwargs):
             calls.append(kwargs)
+            quest = kwargs["quest"]
             return QuestCompletionResult(
                 player_id=kwargs["player_id"],
-                quest_id=kwargs["quest_id"],
-                action_type=kwargs["action_type"],
+                quest_id=quest.id,
+                action_type=quest.action_type,
                 completed=True,
-                reward=kwargs["reward"],
+                reward=quest.reward,
                 completed_at=None,
                 cooldown_until=None,
             )
@@ -204,10 +205,6 @@ async def test_quest_decorator_uses_persistent_completion_helper() -> None:
     assert calls == [
         {
             "player_id": 52,
-            "quest_id": 777,
-            "action_type": QuestActionType.DAILY_ROUTINE,
-            "reward": QuestReward(coins=12),
-            "cooldown": timedelta(minutes=5),
-            "period": QuestPeriod.DAILY,
+            "quest": quest,
         }
     ]

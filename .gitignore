@@ -24,6 +24,3 @@ data/
 *.db
 .env
 deploy_on_server.fish
-
-# some
-decorators/

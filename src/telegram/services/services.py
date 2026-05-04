@@ -1,6 +1,8 @@
 """Orchestration layer used by Telegram handlers."""
 
 import asyncio
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager, nullcontext
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from random import Random
@@ -70,6 +72,7 @@ from src.telegram.services.players import (
 )
 from src.telegram.services.quests import QuestServiceMixin
 from src.telegram.services.social import SocialServiceMixin
+from src.telegram.services.support import AsyncReentrantLock
 
 
 _DEFAULT_FREE_CARD_WEIGHTS = {
@@ -140,6 +143,7 @@ class TelegramServices(
     battle_inactive_round_limit: int
     enable_background_battle_timers: bool
     battle_timeout_notifier: BattleTimeoutNotifier | None
+    write_lock: AsyncReentrantLock
     free_card_weights: dict[Rarity, int]
     free_resource_weights: dict[ResourceType, int]
     free_resource_values: dict[ResourceType, int]
@@ -217,6 +221,7 @@ class TelegramServices(
         self.battle_inactive_round_limit = 10
         self.enable_background_battle_timers = False
         self.battle_timeout_notifier = None
+        self.write_lock = AsyncReentrantLock()
         self.rng = Random()
         self.ideas = (
             PersistentIdeaRepository(self.store)
@@ -256,6 +261,19 @@ class TelegramServices(
         self.store.save()
         if self.catalog is not self.store and hasattr(self.catalog, "save"):
             self.catalog.save()
+
+    @asynccontextmanager
+    async def write_transaction(self) -> AsyncIterator[None]:
+        """Serialize a service write and commit repository changes atomically."""
+
+        async with self.write_lock:
+            transaction = (
+                self.store.transaction()
+                if hasattr(self.store, "transaction")
+                else nullcontext()
+            )
+            with transaction:
+                yield
 
     async def shutdown(self) -> None:
         """Flush state and release storage resources."""
@@ -309,10 +327,11 @@ class TelegramServices(
     async def record_action(self, player_id: int, action: str) -> None:
         """Remember that a player performed an action."""
 
-        self.action_events.append((player_id, action))
-        self.action_events[:] = self.action_events[-_MAX_ACTION_EVENTS:]
-        self._persist_runtime_state()
-        await self.process_matchmaking()
+        async with self.write_transaction():
+            self.action_events.append((player_id, action))
+            self.action_events[:] = self.action_events[-_MAX_ACTION_EVENTS:]
+            self._persist_runtime_state()
+            await self.process_matchmaking()
 
     def _seed_battle_pass(self) -> None:
         """Create a default active battle pass season."""

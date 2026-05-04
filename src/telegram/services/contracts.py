@@ -7,6 +7,7 @@ creating a circular dependency.
 
 import asyncio
 from collections.abc import Awaitable, MutableMapping
+from contextlib import AbstractAsyncContextManager
 from datetime import datetime
 from random import Random
 from typing import Protocol, TypedDict
@@ -30,6 +31,7 @@ from src.shared.enums import Rarity, ResourceType
 from src.shared.value_objects.deck_slots import DeckSlots
 from src.shop.domain.entities import ShopItem
 from src.shop.domain.services import ShopService
+from src.telegram.services.support import AsyncReentrantLock
 
 
 FreeRewardSettings = dict[str, dict[str, int]]
@@ -274,6 +276,7 @@ class TelegramServiceContext(Protocol):
     battle_inactive_round_limit: int
     enable_background_battle_timers: bool
     battle_timeout_notifier: BattleTimeoutNotifier | None
+    write_lock: AsyncReentrantLock
     rng: Random
     free_card_weights: dict[Rarity, int]
     free_resource_weights: dict[ResourceType, int]
@@ -304,6 +307,7 @@ class TelegramServiceContext(Protocol):
         player: Player,
         background: ProfileBackgroundTemplate,
     ) -> bool: ...
+    def write_transaction(self) -> AbstractAsyncContextManager[None]: ...
     def _clear_battle_round_drafts(self, battle_id: int) -> None: ...
     def _remove_card_ids_from_deck_drafts(self, removed_card_ids: set[int]) -> None: ...
     def _persist_runtime_state(self) -> None: ...

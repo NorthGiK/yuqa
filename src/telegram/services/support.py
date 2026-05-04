@@ -1,7 +1,34 @@
 """Shared helpers for Telegram service mixins."""
 
+import asyncio
 from collections.abc import Mapping
 from dataclasses import dataclass
+from typing import Any
+
+
+class AsyncReentrantLock:
+    """Async lock that can be re-entered by the same task."""
+
+    def __init__(self) -> None:
+        self._lock = asyncio.Lock()
+        self._owner: asyncio.Task[Any] | None = None
+        self._depth = 0
+
+    async def __aenter__(self) -> None:
+        task = asyncio.current_task()
+        if task is not None and task is self._owner:
+            self._depth += 1
+            return
+        await self._lock.acquire()
+        self._owner = task
+        self._depth = 1
+
+    async def __aexit__(self, *_exc_info: object) -> None:
+        self._depth -= 1
+        if self._depth > 0:
+            return
+        self._owner = None
+        self._lock.release()
 
 
 @dataclass(slots=True)
@@ -28,4 +55,4 @@ def _next_id(items: Mapping[int, object]) -> int:
     return max(items, default=0) + 1
 
 
-__all__ = ["BattleRoundSummary", "_next_id"]
+__all__ = ["AsyncReentrantLock", "BattleRoundSummary", "_next_id"]

@@ -1,5 +1,6 @@
 """Persistence tests for the database-backed runtime."""
 
+import asyncio
 import json
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -354,6 +355,88 @@ async def test_database_services_persist_quest_cooldowns(tmp_path: Path) -> None
     assert progress.completed_count == 2
     
     await reloaded.shutdown()
+
+
+@pytest.mark.asyncio
+async def test_service_write_transaction_rolls_back_memory_and_database(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Failed multi-row writes should not leave partial rewards in memory or DB."""
+
+    database_url = _sqlite_url(tmp_path / "rollback.db")
+    upgrade_head(database_url)
+    services = TelegramServices(tmp_path / "catalog.json", database_url=database_url)
+    quest = QuestDefinition(
+        id=11,
+        period=QuestPeriod.DAILY,
+        action_type=QuestActionType.DAILY_ROUTINE,
+        reward=QuestReward(coins=50),
+        cooldown=timedelta(hours=1),
+    )
+    original_row_for_item = services.store._row_for_item
+
+    def fail_on_progress(section: str, key: object, item: object) -> object:
+        if section == "quest_progress":
+            raise RuntimeError("forced transaction failure")
+        return original_row_for_item(section, key, item)
+
+    monkeypatch.setattr(services.store, "_row_for_item", fail_on_progress)
+
+    with pytest.raises(RuntimeError, match="forced transaction failure"):
+        await services.complete_action_quest(
+            player_id=777,
+            quest=quest,
+            now=datetime(2026, 5, 1, 12, tzinfo=timezone.utc),
+        )
+
+    assert await services.get_player(777) is None
+    assert await services.quests.get_progress(777, quest.id) is None
+
+    reloaded = TelegramServices(tmp_path / "catalog.json", database_url=database_url)
+    try:
+        assert await reloaded.get_player(777) is None
+        assert await reloaded.quests.get_progress(777, quest.id) is None
+    finally:
+        await services.shutdown()
+        await reloaded.shutdown()
+
+
+@pytest.mark.asyncio
+async def test_concurrent_quest_completion_is_idempotent_per_cooldown() -> None:
+    """Concurrent completions for one ready quest should award only once."""
+
+    services = TelegramServices()
+    started_at = datetime(2026, 5, 1, 12, tzinfo=timezone.utc)
+    quest = QuestDefinition(
+        id=12,
+        period=QuestPeriod.DAILY,
+        action_type=QuestActionType.DAILY_ROUTINE,
+        reward=QuestReward(coins=25),
+        cooldown=timedelta(hours=1),
+    )
+
+    try:
+        results = await asyncio.gather(
+            *(
+                services.complete_action_quest(
+                    player_id=778,
+                    quest=quest,
+                    now=started_at,
+                )
+                for _ in range(5)
+            )
+        )
+        player = await services.get_player(778)
+        progress = await services.quests.get_progress(778, quest.id)
+
+        assert sum(result.completed for result in results) == 1
+        assert player is not None
+        assert player.wallet.coins == 25
+        assert progress is not None
+        assert progress.completed_count == 1
+    finally:
+        await services.shutdown()
 
 
 @pytest.mark.asyncio

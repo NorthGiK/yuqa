@@ -124,6 +124,7 @@ Current feature packages:
 - `callbacks.py`: callback payload schemas
 - `config.py`: env parsing
 - `reply.py`: safe send/edit helpers
+- `decorators/`: reusable handler decorators such as quest completion wiring
 - `router/`: router builder, handler registration, wizard steps, reusable
   router views, and helper functions
 - `services/`: storage selection, typed mixin contracts, orchestration mixins,
@@ -131,6 +132,7 @@ Current feature packages:
 - `states.py`: FSM state groups
 - `texts/`: package root plus family-specific copy modules
 - `ui/`: package root plus family-specific markup modules
+- `decorators/`: small import-stable handler helper package
 
 ## Documentation Surfaces
 - `README.md`: primary overview for players and developers in English.

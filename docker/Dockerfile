@@ -9,7 +9,7 @@ WORKDIR /app
 
 RUN useradd --create-home --uid 10001 appuser
 
-COPY pyproject.toml main.py alembic.ini ./
+COPY pyproject.toml main.py alembic.ini .env ./
 COPY src ./src
 COPY alembic ./alembic
 

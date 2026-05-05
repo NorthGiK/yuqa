@@ -30,15 +30,16 @@ class SocialServiceMixin(_SocialServiceMixinBase):
     ) -> Idea:
         """Create a new player proposal that waits for admin review."""
 
-        player: Player = await self.get_or_create_player(telegram_id)
-        idea: Idea = self.idea_service.create(
-            _next_id(self.ideas.items),
-            player.telegram_id,
-            title,
-            description,
-        )
-        await self.ideas.add(idea)
-        return idea
+        async with self.write_transaction():
+            player: Player = await self.get_or_create_player(telegram_id)
+            idea: Idea = self.idea_service.create(
+                _next_id(self.ideas.items),
+                player.telegram_id,
+                title,
+                description,
+            )
+            await self.ideas.add(idea)
+            return idea
 
     async def get_idea(self, idea_id: int) -> Idea:
         """Return one idea or raise when it is missing."""
@@ -87,79 +88,86 @@ class SocialServiceMixin(_SocialServiceMixinBase):
     ) -> Idea:
         """Cast one upvote or downvote for a published idea."""
 
-        player: Player = await self.get_or_create_player(telegram_id)
-        # increase direction of vote if premium player
-        if player.is_premium:
-            direction *= 10
+        async with self.write_transaction():
+            player: Player = await self.get_or_create_player(telegram_id)
+            # increase direction of vote if premium player
+            if player.is_premium:
+                direction *= 10
 
-        idea = await self.get_idea(idea_id)
-        self.idea_service.vote(idea, telegram_id, direction)
-        await self.ideas.save(idea)
-        return idea
+            idea = await self.get_idea(idea_id)
+            self.idea_service.vote(idea, telegram_id, direction)
+            await self.ideas.save(idea)
+            return idea
 
     async def publish_idea(self, idea_id: int) -> Idea:
         """Accept a pending idea onto the public ideas page."""
 
-        idea = await self.get_idea(idea_id)
-        self.idea_service.publish(idea)
-        await self.ideas.save(idea)
-        return idea
+        async with self.write_transaction():
+            idea = await self.get_idea(idea_id)
+            self.idea_service.publish(idea)
+            await self.ideas.save(idea)
+            return idea
 
     async def collect_idea(self, idea_id: int) -> Idea:
         """Accept a public idea into the author's collection."""
 
-        idea = await self.get_idea(idea_id)
-        self.idea_service.collect(idea)
-        await self.ideas.save(idea)
-        return idea
+        async with self.write_transaction():
+            idea = await self.get_idea(idea_id)
+            self.idea_service.collect(idea)
+            await self.ideas.save(idea)
+            return idea
 
     async def reject_idea(self, idea_id: int) -> Idea:
         """Archive an idea away from the public ideas page."""
 
-        idea = await self.get_idea(idea_id)
-        self.idea_service.reject(idea)
-        await self.ideas.save(idea)
-        return idea
+        async with self.write_transaction():
+            idea = await self.get_idea(idea_id)
+            self.idea_service.reject(idea)
+            await self.ideas.save(idea)
+            return idea
 
     async def create_clan(self, telegram_id: int, name: str, icon: str) -> Clan:
         """Create a clan for the player who started the flow."""
 
-        owner = await self.get_or_create_player(telegram_id)
-        if owner.clan_id is not None:
-            raise ForbiddenActionError("player is already in a clan")
-        clan = Clan(
-            id=await self._next_clan_id(),
-            owner_player_id=owner.telegram_id,
-            name=name,
-            icon=icon,
-        )
-        self.clan_service.create_clan(clan, owner)
-        await self.clans.add(clan)
-        await self.players.save(owner)
-        return clan
+        async with self.write_transaction():
+            owner = await self.get_or_create_player(telegram_id)
+            if owner.clan_id is not None:
+                raise ForbiddenActionError("player is already in a clan")
+            clan = Clan(
+                id=await self._next_clan_id(),
+                owner_player_id=owner.telegram_id,
+                name=name,
+                icon=icon,
+            )
+            self.clan_service.create_clan(clan, owner)
+            await self.clans.add(clan)
+            await self.players.save(owner)
+            return clan
 
     async def join_clan(self, telegram_id: int, clan_id: int) -> Clan:
         """Join an existing clan."""
 
-        player = await self.get_or_create_player(telegram_id)
-        clan = await self.clans.get_by_id(clan_id)
-        if clan is None:
-            raise EntityNotFoundError("clan not found")
-        self.clan_service.join_clan(clan, player)
-        await self.clans.save(clan)
-        await self.players.save(player)
-        return clan
+        async with self.write_transaction():
+            player = await self.get_or_create_player(telegram_id)
+            clan = await self.clans.get_by_id(clan_id)
+            if clan is None:
+                raise EntityNotFoundError("clan not found")
+            self.clan_service.join_clan(clan, player)
+            await self.clans.save(clan)
+            await self.players.save(player)
+            return clan
 
     async def leave_clan(self, telegram_id: int) -> None:
         """Leave the current clan."""
 
-        player = await self.get_or_create_player(telegram_id)
-        clan = await self.player_clan(player)
-        if clan is None:
-            raise EntityNotFoundError("clan not found")
-        self.clan_service.leave_clan(clan, player)
-        await self.clans.save(clan)
-        await self.players.save(player)
+        async with self.write_transaction():
+            player = await self.get_or_create_player(telegram_id)
+            clan = await self.player_clan(player)
+            if clan is None:
+                raise EntityNotFoundError("clan not found")
+            self.clan_service.leave_clan(clan, player)
+            await self.clans.save(clan)
+            await self.players.save(player)
 
     @staticmethod
     def _sort_ideas(ideas: list[Idea]) -> list[Idea]:

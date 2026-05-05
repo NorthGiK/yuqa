@@ -229,26 +229,27 @@ class BattlePassServiceMixin(_BattlePassServiceMixinBase):
     ) -> BattlePassSeason:
         """Create one season after validating name and date overlap."""
 
-        if not name.strip():
-            raise ValidationError("battle pass name must not be empty")
-        if start_at >= end_at:
-            raise ValidationError("start_at must be before end_at")
-        seasons = self._list_seasons(repository)
-        for season in seasons:
-            if start_at <= season.end_at and end_at >= season.start_at:
-                raise ForbiddenActionError(
-                    "battle pass dates overlap with an existing season"
-                )
-        season = BattlePassSeason(
-            id=_next_id(repository.items),
-            name=name.strip(),
-            start_at=start_at,
-            end_at=end_at,
-            levels=[],
-            is_active=True,
-        )
-        await repository.save(season)
-        return season
+        async with self.write_transaction():
+            if not name.strip():
+                raise ValidationError("battle pass name must not be empty")
+            if start_at >= end_at:
+                raise ValidationError("start_at must be before end_at")
+            seasons = self._list_seasons(repository)
+            for season in seasons:
+                if start_at <= season.end_at and end_at >= season.start_at:
+                    raise ForbiddenActionError(
+                        "battle pass dates overlap with an existing season"
+                    )
+            season = BattlePassSeason(
+                id=_next_id(repository.items),
+                name=name.strip(),
+                start_at=start_at,
+                end_at=end_at,
+                levels=[],
+                is_active=True,
+            )
+            await repository.save(season)
+            return season
 
     async def _delete_finished_season(
         self,
@@ -257,12 +258,13 @@ class BattlePassServiceMixin(_BattlePassServiceMixinBase):
     ) -> None:
         """Delete one finished season from the selected repository."""
 
-        season = await repository.get_by_id(season_id)
-        if season is None:
-            raise EntityNotFoundError("battle pass season not found")
-        if season.end_at > datetime.now(timezone.utc):
-            raise ForbiddenActionError("battle pass is not finished yet")
-        await repository.delete(season_id)
+        async with self.write_transaction():
+            season = await repository.get_by_id(season_id)
+            if season is None:
+                raise EntityNotFoundError("battle pass season not found")
+            if season.end_at > datetime.now(timezone.utc):
+                raise ForbiddenActionError("battle pass is not finished yet")
+            await repository.delete(season_id)
 
     async def _add_level_to_active_season(
         self,
@@ -275,19 +277,20 @@ class BattlePassServiceMixin(_BattlePassServiceMixinBase):
     ) -> BattlePassSeason:
         """Add or replace one level in the active season."""
 
-        season = await season_getter()
-        if season is None:
-            raise EntityNotFoundError("battle pass season not found")
-        now = datetime.now(timezone.utc)
-        if not (season.start_at <= now <= season.end_at):
-            raise ForbiddenActionError("battle pass season is not active")
-        season.levels = [
-            level for level in season.levels if level.level_number != level_number
-        ]
-        season.levels.append(BattlePassLevel(level_number, required_points, reward))
-        season.levels.sort(key=lambda level: level.level_number)
-        await repository.save(season)
-        return season
+        async with self.write_transaction():
+            season = await season_getter()
+            if season is None:
+                raise EntityNotFoundError("battle pass season not found")
+            now = datetime.now(timezone.utc)
+            if not (season.start_at <= now <= season.end_at):
+                raise ForbiddenActionError("battle pass season is not active")
+            season.levels = [
+                level for level in season.levels if level.level_number != level_number
+            ]
+            season.levels.append(BattlePassLevel(level_number, required_points, reward))
+            season.levels.sort(key=lambda level: level.level_number)
+            await repository.save(season)
+            return season
 
     async def _active_progress_for(
         self,
@@ -297,14 +300,15 @@ class BattlePassServiceMixin(_BattlePassServiceMixinBase):
     ) -> BattlePassProgress:
         """Return progress for the active season, creating it when missing."""
 
-        season = await season_getter()
-        if season is None:
-            raise EntityNotFoundError("battle pass season not found")
-        progress = await repository.get_for_player(player_id, season.id)
-        if progress is None:
-            progress = BattlePassProgress(player_id=player_id, season_id=season.id)
-            await repository.save(progress)
-        return progress
+        async with self.write_transaction():
+            season = await season_getter()
+            if season is None:
+                raise EntityNotFoundError("battle pass season not found")
+            progress = await repository.get_for_player(player_id, season.id)
+            if progress is None:
+                progress = BattlePassProgress(player_id=player_id, season_id=season.id)
+                await repository.save(progress)
+            return progress
 
     async def _buy_next_level(
         self,
@@ -317,32 +321,33 @@ class BattlePassServiceMixin(_BattlePassServiceMixinBase):
     ) -> tuple[BattlePassProgress, int]:
         """Buy and claim the next available level from one battle pass track."""
 
-        season = await season_getter()
-        if season is None:
-            raise EntityNotFoundError("battle pass season not found")
-        player = await self.get_or_create_player(telegram_id)
-        if require_premium and not player.is_premium:
-            raise ForbiddenActionError(
-                "premium battle pass is available only for premium players"
+        async with self.write_transaction():
+            season = await season_getter()
+            if season is None:
+                raise EntityNotFoundError("battle pass season not found")
+            player = await self.get_or_create_player(telegram_id)
+            if require_premium and not player.is_premium:
+                raise ForbiddenActionError(
+                    "premium battle pass is available only for premium players"
+                )
+            progress = await progress_getter(telegram_id)
+            next_level = next(
+                (
+                    level
+                    for level in season.levels
+                    if level.level_number not in progress.claimed_levels
+                ),
+                None,
             )
-        progress = await progress_getter(telegram_id)
-        next_level = next(
-            (
-                level
-                for level in season.levels
-                if level.level_number not in progress.claimed_levels
-            ),
-            None,
-        )
-        if next_level is None:
-            raise ValidationError("battle pass is already fully claimed")
-        player.wallet.spend(ResourceType.COINS, 250)
-        progress.points = max(progress.points, next_level.required_points)
-        progress.claimed_levels.add(next_level.level_number)
-        self._apply_battle_pass_reward(player, next_level.reward)
-        await self.players.save(player)
-        await progress_repository.save(progress)
-        return progress, next_level.level_number
+            if next_level is None:
+                raise ValidationError("battle pass is already fully claimed")
+            player.wallet.spend(ResourceType.COINS, 250)
+            progress.points = max(progress.points, next_level.required_points)
+            progress.claimed_levels.add(next_level.level_number)
+            self._apply_battle_pass_reward(player, next_level.reward)
+            await self.players.save(player)
+            await progress_repository.save(progress)
+            return progress, next_level.level_number
 
     @staticmethod
     def _apply_battle_pass_reward(player: Player, reward: QuestReward) -> None:

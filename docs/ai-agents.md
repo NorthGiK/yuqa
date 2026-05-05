@@ -5,6 +5,7 @@
 2. Read `AGENTS.md`.
 3. Use the stable package roots for imports:
    `src.telegram.router`, `src.telegram.services`,
+   `src.telegram.decorators`,
    `src.telegram.texts`, `src.telegram.ui`.
 4. Edit the implementation modules inside those directories when behavior
    changes.
@@ -13,6 +14,8 @@
 - `src.telegram.router`:
   import-stable router API backed by `src/telegram/router/__init__.py` and
   implemented in `src/telegram/router/router.py`.
+- `src.telegram.decorators`:
+  import-stable decorator helpers for handler-side quest wiring.
 - `src.telegram.services`:
   import-stable service container API backed by
   `src/telegram/services/__init__.py` and implemented in
@@ -36,6 +39,8 @@
 - `src/telegram/services/content.py` owns cards, banners, shop items, starter cards, and content-admin flows.
 - `src/telegram/services/quests.py` owns cooldown-aware quest completion for player actions.
 - `src/telegram/services/support.py` holds small shared service helpers.
+- `src/telegram/decorators/quests.py` owns the quest handler decorator that
+  delegates to persistent quest completion.
 - `src/telegram/router/router.py` assembles the router from the public/admin handler modules.
 - `src/telegram/router/public.py` owns public command and callback registration.
 - `src/telegram/router/admin.py` owns admin command and callback registration.
@@ -180,6 +185,7 @@ Before expanding those files, confirm the logic cannot live in:
 - `README.md`: main English overview for players and developers.
 - `README.ru.md`: Russian localization of the main overview.
 - `docs/tests.md`: test inventory and where to add coverage.
+- `src/telegram/decorators/quests.py`: quest decorator wiring for handlers.
 - `make stress`: local randomized service-level stress harness for the
   database-backed runtime.
 - `docker/compose.yaml`: production bot and PostgreSQL deployment stack.

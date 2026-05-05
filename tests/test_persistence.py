@@ -1,5 +1,6 @@
 """Persistence tests for the database-backed runtime."""
 
+import asyncio
 import json
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -19,6 +20,7 @@ from src.shared.enums import (
     CardClass,
     CardForm,
     IdeaStatus,
+    ProfileBackgroundRarity,
     QuestActionType,
     Rarity,
     ResourceType,
@@ -153,6 +155,57 @@ async def test_database_services_persist_state_between_restarts(tmp_path: Path) 
     assert pending[0].title == "Persistent idea"
     assert reloaded.deck_drafts[1] == draft
     assert not await reloaded.is_searching(1)
+
+    await reloaded.shutdown()
+
+
+@pytest.mark.asyncio
+async def test_database_services_persist_media_catalog_between_restarts(
+    tmp_path: Path,
+) -> None:
+    """Card image refs and profile backgrounds should survive a restart."""
+
+    catalog_path = tmp_path / "catalog.json"
+    database_url = _sqlite_url(tmp_path / "media.db")
+    upgrade_head(database_url)
+
+    services = TelegramServices(catalog_path, database_url=database_url)
+    template = await services.create_card_template(
+        name="Media",
+        universe=Universe.ORIGINAL,
+        rarity=Rarity.MYTHIC,
+        image_key="media/cards/media-card.webp",
+        card_class=CardClass.SUPPORT,
+        base_stats=StatBlock(4, 9, 2),
+        ascended_stats=StatBlock(7, 12, 4),
+        ability=Ability(0, 0),
+    )
+    background = await services.create_profile_background(
+        ProfileBackgroundRarity.LEGENDARY,
+        "media/backgrounds/profile-bg.jpg",
+        content_type="image/jpeg",
+        original_name="profile-bg.jpg",
+    )
+    player = await services.get_or_create_player(601)
+    assert player.grant_profile_background(background.id)
+    await services.players.save(player)
+    await services.select_profile_background(player.telegram_id, background.id)
+    await services.shutdown()
+
+    reloaded = TelegramServices(catalog_path, database_url=database_url)
+    reloaded_template = await reloaded.get_template(template.id)
+    reloaded_background = await reloaded.get_profile_background(background.id)
+    reloaded_player = await reloaded.get_player(player.telegram_id)
+
+    assert reloaded_template is not None
+    assert reloaded_template.image.storage_key == "media/cards/media-card.webp"
+    assert reloaded_background is not None
+    assert reloaded_background.media.storage_key == "media/backgrounds/profile-bg.jpg"
+    assert reloaded_background.media.content_type == "image/jpeg"
+    assert reloaded_background.media.original_name == "profile-bg.jpg"
+    assert reloaded_player is not None
+    assert reloaded_player.owned_profile_background_ids == [background.id]
+    assert reloaded_player.selected_profile_background_id == background.id
 
     await reloaded.shutdown()
 
@@ -354,6 +407,219 @@ async def test_database_services_persist_quest_cooldowns(tmp_path: Path) -> None
     assert progress.completed_count == 2
     
     await reloaded.shutdown()
+
+
+@pytest.mark.asyncio
+async def test_service_write_transaction_rolls_back_memory_and_database(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Failed multi-row writes should not leave partial rewards in memory or DB."""
+
+    database_url = _sqlite_url(tmp_path / "rollback.db")
+    upgrade_head(database_url)
+    services = TelegramServices(tmp_path / "catalog.json", database_url=database_url)
+    quest = QuestDefinition(
+        id=11,
+        period=QuestPeriod.DAILY,
+        action_type=QuestActionType.DAILY_ROUTINE,
+        reward=QuestReward(coins=50),
+        cooldown=timedelta(hours=1),
+    )
+    original_row_for_item = services.store._row_for_item
+
+    def fail_on_progress(section: str, key: object, item: object) -> object:
+        if section == "quest_progress":
+            raise RuntimeError("forced transaction failure")
+        return original_row_for_item(section, key, item)
+
+    monkeypatch.setattr(services.store, "_row_for_item", fail_on_progress)
+
+    with pytest.raises(RuntimeError, match="forced transaction failure"):
+        await services.complete_action_quest(
+            player_id=777,
+            quest=quest,
+            now=datetime(2026, 5, 1, 12, tzinfo=timezone.utc),
+        )
+
+    assert await services.get_player(777) is None
+    assert await services.quests.get_progress(777, quest.id) is None
+
+    reloaded = TelegramServices(tmp_path / "catalog.json", database_url=database_url)
+    try:
+        assert await reloaded.get_player(777) is None
+        assert await reloaded.quests.get_progress(777, quest.id) is None
+    finally:
+        await services.shutdown()
+        await reloaded.shutdown()
+
+
+@pytest.mark.asyncio
+async def test_concurrent_quest_completion_is_idempotent_per_cooldown() -> None:
+    """Concurrent completions for one ready quest should award only once."""
+
+    services = TelegramServices()
+    started_at = datetime(2026, 5, 1, 12, tzinfo=timezone.utc)
+    quest = QuestDefinition(
+        id=12,
+        period=QuestPeriod.DAILY,
+        action_type=QuestActionType.DAILY_ROUTINE,
+        reward=QuestReward(coins=25),
+        cooldown=timedelta(hours=1),
+    )
+
+    try:
+        results = await asyncio.gather(
+            *(
+                services.complete_action_quest(
+                    player_id=778,
+                    quest=quest,
+                    now=started_at,
+                )
+                for _ in range(5)
+            )
+        )
+        player = await services.get_player(778)
+        progress = await services.quests.get_progress(778, quest.id)
+
+        assert sum(result.completed for result in results) == 1
+        assert player is not None
+        assert player.wallet.coins == 25
+        assert progress is not None
+        assert progress.completed_count == 1
+    finally:
+        await services.shutdown()
+
+
+@pytest.mark.asyncio
+async def test_concurrent_database_quest_completion_survives_restart(
+    tmp_path: Path,
+) -> None:
+    """Concurrent quest attempts should leave one durable cooldown record."""
+
+    catalog_path = tmp_path / "catalog.json"
+    database_url = _sqlite_url(tmp_path / "concurrent_quests.db")
+    upgrade_head(database_url)
+    started_at = datetime(2026, 5, 1, 12, tzinfo=timezone.utc)
+    player_id = 779
+    quest = QuestDefinition(
+        id=13,
+        period=QuestPeriod.DAILY,
+        action_type=QuestActionType.DAILY_ROUTINE,
+        reward=QuestReward(coins=25),
+        cooldown=timedelta(hours=1),
+    )
+
+    services = TelegramServices(catalog_path, database_url=database_url)
+    try:
+        first_results = await asyncio.gather(
+            *(
+                services.complete_action_quest(
+                    player_id=player_id,
+                    quest=quest,
+                    now=started_at,
+                )
+                for _ in range(20)
+            )
+        )
+        blocked_results = await asyncio.gather(
+            *(
+                services.complete_action_quest(
+                    player_id=player_id,
+                    quest=quest,
+                    now=started_at + timedelta(minutes=30),
+                )
+                for _ in range(20)
+            )
+        )
+        player = await services.get_player(player_id)
+        progress = await services.quests.get_progress(player_id, quest.id)
+
+        assert sum(result.completed for result in first_results) == 1
+        assert not any(result.completed for result in blocked_results)
+        assert player is not None
+        assert player.wallet.coins == 25
+        assert progress is not None
+        assert progress.completed_count == 1
+        assert progress.cooldown_until == started_at + timedelta(hours=1)
+    finally:
+        services.store.close()
+
+    reloaded = TelegramServices(catalog_path, database_url=database_url)
+    try:
+        blocked_after_restart = await reloaded.complete_action_quest(
+            player_id=player_id,
+            quest=quest,
+            now=started_at + timedelta(minutes=45),
+        )
+        ready_after_restart = await reloaded.complete_action_quest(
+            player_id=player_id,
+            quest=quest,
+            now=started_at + timedelta(hours=2),
+        )
+        reloaded_player = await reloaded.get_player(player_id)
+        reloaded_progress = await reloaded.quests.get_progress(player_id, quest.id)
+
+        assert blocked_after_restart.completed is False
+        assert ready_after_restart.completed
+        assert reloaded_player is not None
+        assert reloaded_player.wallet.coins == 50
+        assert reloaded_progress is not None
+        assert reloaded_progress.completed_count == 2
+    finally:
+        await reloaded.shutdown()
+
+
+@pytest.mark.asyncio
+async def test_concurrent_idea_creation_uses_unique_ids_after_restart(
+    tmp_path: Path,
+) -> None:
+    """Concurrent create flows should not reuse ids across service restarts."""
+
+    catalog_path = tmp_path / "catalog.json"
+    database_url = _sqlite_url(tmp_path / "concurrent_ideas.db")
+    upgrade_head(database_url)
+    services = TelegramServices(catalog_path, database_url=database_url)
+
+    try:
+        ideas = await asyncio.gather(
+            *(
+                services.propose_idea(
+                    900 + index % 4,
+                    f"Idea {index:02}",
+                    f"Description for concurrent idea {index:02}",
+                )
+                for index in range(25)
+            )
+        )
+
+        assert sorted(idea.id for idea in ideas) == list(range(1, 26))
+        assert {idea.player_id for idea in ideas} == {900, 901, 902, 903}
+    finally:
+        services.store.close()
+
+    reloaded = TelegramServices(catalog_path, database_url=database_url)
+    try:
+        pending, has_previous, has_next = await reloaded.list_ideas(
+            IdeaStatus.PENDING,
+            page_size=100,
+        )
+        next_idea = await reloaded.propose_idea(
+            904,
+            "Idea after restart",
+            "Description created after the service restart",
+        )
+        reloaded_players = [
+            await reloaded.get_player(player_id) for player_id in range(900, 905)
+        ]
+
+        assert has_previous is False
+        assert has_next is False
+        assert sorted(idea.id for idea in pending) == list(range(1, 26))
+        assert all(player is not None for player in reloaded_players)
+        assert next_idea.id == 26
+    finally:
+        await reloaded.shutdown()
 
 
 @pytest.mark.asyncio

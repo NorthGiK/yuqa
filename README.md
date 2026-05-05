@@ -82,6 +82,18 @@ await services.complete_action_quest(
 The helper checks the player's quest cooldown, applies the supplied reward only
 when the quest is ready, and persists the next cooldown timestamp.
 
+For handler code that should trigger the quest automatically, import
+`quest_init` from `src.telegram.decorators`. It resolves the Telegram player
+id from the incoming message or callback and delegates to the same persistent
+quest service path.
+
+## Transactional writes
+
+Write-heavy service flows run inside a guarded transaction wrapper so related
+state changes commit together and roll back together on failure. This keeps
+quest rewards, battle updates, purchases, deck changes, and admin content
+changes consistent when several players act at the same time.
+
 ## AI-agent workflow
 
 The repository includes an agent-focused inspection script and guide:

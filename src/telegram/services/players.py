@@ -52,13 +52,14 @@ class PlayerProfileServiceMixin(TelegramServiceContext):
     async def get_or_create_player(self, telegram_id: int) -> Player:
         """Return an existing player or create a fresh one."""
 
-        player = await self.players.get_by_telegram_id(telegram_id)
-        if player is None:
-            player = Player(telegram_id=telegram_id)
-            await self.players.add(player)
-            await self._grant_standard_cards(player)
-            await self.players.save(player)
-        return player
+        async with self.write_transaction():
+            player = await self.players.get_by_telegram_id(telegram_id)
+            if player is None:
+                player = Player(telegram_id=telegram_id)
+                await self.players.add(player)
+                await self._grant_standard_cards(player)
+                await self.players.save(player)
+            return player
 
     async def get_player(self, telegram_id: int) -> Player | None:
         """Return a player without creating one."""
@@ -168,170 +169,179 @@ class PlayerProfileServiceMixin(TelegramServiceContext):
     ) -> tuple[PlayerCard, CardTemplate]:
         """Grant one free random card if the cooldown is ready."""
 
-        player = await self.get_or_create_player(telegram_id)
-        self._ensure_free_reward_ready(player.last_free_card_claim_at)
-        templates = await self.card_templates.list_active()
-        templates_by_rarity = {
-            rarity: [template for template in templates if template.rarity == rarity]
-            for rarity in _FREE_CARD_RARITIES
-        }
-        available_weights = {
-            rarity: self.free_card_weights[rarity]
-            for rarity, items in templates_by_rarity.items()
-            if items and self.free_card_weights.get(rarity, 0) > 0
-        }
-        if not available_weights:
-            raise ValidationError("нет доступных карт для бесплатной награды")
-        chosen_rarity = self._pick_weighted(available_weights)
-        template = self.rng.choice(templates_by_rarity[chosen_rarity])
-        card = await self._grant_template_to_player(player, template)
-        player.last_free_card_claim_at = datetime.now(timezone.utc)
-        await self.players.save(player)
-        return card, template
+        async with self.write_transaction():
+            player = await self.get_or_create_player(telegram_id)
+            self._ensure_free_reward_ready(player.last_free_card_claim_at)
+            templates = await self.card_templates.list_active()
+            templates_by_rarity = {
+                rarity: [template for template in templates if template.rarity == rarity]
+                for rarity in _FREE_CARD_RARITIES
+            }
+            available_weights = {
+                rarity: self.free_card_weights[rarity]
+                for rarity, items in templates_by_rarity.items()
+                if items and self.free_card_weights.get(rarity, 0) > 0
+            }
+            if not available_weights:
+                raise ValidationError("нет доступных карт для бесплатной награды")
+            chosen_rarity = self._pick_weighted(available_weights)
+            template = self.rng.choice(templates_by_rarity[chosen_rarity])
+            card = await self._grant_template_to_player(player, template)
+            player.last_free_card_claim_at = datetime.now(timezone.utc)
+            await self.players.save(player)
+            return card, template
 
     async def claim_free_resources(self, telegram_id: int) -> tuple[ResourceType, int]:
         """Grant one free random resource if the cooldown is ready."""
 
-        player = await self.get_or_create_player(telegram_id)
-        self._ensure_free_reward_ready(player.last_free_resources_claim_at)
-        weights = {
-            resource: self.free_resource_weights[resource]
-            for resource in _FREE_RESOURCE_TYPES
-            if self.free_resource_weights.get(resource, 0) > 0
-        }
-        if not weights:
-            raise ValidationError("нет доступных ресурсов для бесплатной награды")
-        resource = self._pick_weighted(weights)
-        amount = self.free_resource_values.get(resource, 0)
-        if amount <= 0:
-            raise ValidationError(f"value for {resource.value} must be > 0")
-        player.wallet.add(resource, amount)
-        player.last_free_resources_claim_at = datetime.now(timezone.utc)
-        await self.players.save(player)
-        return resource, amount
+        async with self.write_transaction():
+            player = await self.get_or_create_player(telegram_id)
+            self._ensure_free_reward_ready(player.last_free_resources_claim_at)
+            weights = {
+                resource: self.free_resource_weights[resource]
+                for resource in _FREE_RESOURCE_TYPES
+                if self.free_resource_weights.get(resource, 0) > 0
+            }
+            if not weights:
+                raise ValidationError("нет доступных ресурсов для бесплатной награды")
+            resource = self._pick_weighted(weights)
+            amount = self.free_resource_values.get(resource, 0)
+            if amount <= 0:
+                raise ValidationError(f"value for {resource.value} must be > 0")
+            player.wallet.add(resource, amount)
+            player.last_free_resources_claim_at = datetime.now(timezone.utc)
+            await self.players.save(player)
+            return resource, amount
 
     async def set_player_nickname(
         self, telegram_id: int, nickname: str | None
     ) -> Player:
         """Set or clear the player's unique nickname."""
 
-        player = await self.get_or_create_player(telegram_id)
-        nickname = self._normalize_nickname(nickname)
-        if nickname is not None:
-            other = await self.players.get_by_nickname(nickname)
-            if other is not None and other.telegram_id != player.telegram_id:
-                raise ValidationError("nickname is already taken")
-        player.nickname = nickname
-        await self.players.save(player)
-        return player
+        async with self.write_transaction():
+            player = await self.get_or_create_player(telegram_id)
+            nickname = self._normalize_nickname(nickname)
+            if nickname is not None:
+                other = await self.players.get_by_nickname(nickname)
+                if other is not None and other.telegram_id != player.telegram_id:
+                    raise ValidationError("nickname is already taken")
+            player.nickname = nickname
+            await self.players.save(player)
+            return player
 
     async def set_player_title(self, telegram_id: int, title: str | None) -> Player:
         """Set or clear the player's title."""
 
-        player = await self.get_or_create_player(telegram_id)
-        player.title = self._normalize_title(title)
-        await self.players.save(player)
-        return player
+        async with self.write_transaction():
+            player = await self.get_or_create_player(telegram_id)
+            player.title = self._normalize_title(title)
+            await self.players.save(player)
+            return player
 
     async def add_creator_points(self, telegram_id: int, amount: int) -> Player:
         """Increase creator points for a player by id."""
 
         if amount <= 0:
             raise ValidationError("creator points amount must be > 0")
-        player = await self.get_or_create_player(telegram_id)
-        player.creator_points += amount
-        await self.players.save(player)
-        return player
+        async with self.write_transaction():
+            player = await self.get_or_create_player(telegram_id)
+            player.creator_points += amount
+            await self.players.save(player)
+            return player
 
     async def set_player_premium(self, telegram_id: int, is_premium: bool) -> Player:
         """Set premium status for an existing player."""
 
-        player = await self.get_player(telegram_id)
-        if player is None:
-            raise EntityNotFoundError("player not found")
-        player.is_premium = is_premium
-        await self.players.save(player)
-        return player
+        async with self.write_transaction():
+            player = await self.get_player(telegram_id)
+            if player is None:
+                raise EntityNotFoundError("player not found")
+            player.is_premium = is_premium
+            await self.players.save(player)
+            return player
 
     async def toggle_player_premium(self, telegram_id: int) -> Player:
         """Toggle premium status for an existing player."""
 
-        player = await self.get_player(telegram_id)
-        if player is None:
-            raise EntityNotFoundError("player not found")
-        player.is_premium = not player.is_premium
-        await self.players.save(player)
-        return player
+        async with self.write_transaction():
+            player = await self.get_player(telegram_id)
+            if player is None:
+                raise EntityNotFoundError("player not found")
+            player.is_premium = not player.is_premium
+            await self.players.save(player)
+            return player
 
     async def delete_player(self, telegram_id: int) -> Player:
         """Delete a player and clean up related runtime state."""
 
-        player: Player | None = await self.get_player(telegram_id)
-        if player is None:
-            raise EntityNotFoundError("player not found")
+        async with self.write_transaction():
+            player: Player | None = await self.get_player(telegram_id)
+            if player is None:
+                raise EntityNotFoundError("player not found")
 
-        clan: Clan | None = await self.player_clan(player)
-        if clan is not None:
-            clan.remove_member(telegram_id)
-            if clan.owner_player_id == telegram_id:
-                for member_id in list(clan.members):
-                    if member_id == telegram_id:
-                        continue
-                    member: Player | None = await self.players.get_by_id(member_id)
-                    if member is not None:
-                        member.clan_id = None
-                        await self.players.save(member)
-                await self.clans.delete(clan.id)
-            else:
-                await self.clans.save(clan)
+            clan: Clan | None = await self.player_clan(player)
+            if clan is not None:
+                clan.remove_member(telegram_id)
+                if clan.owner_player_id == telegram_id:
+                    for member_id in list(clan.members):
+                        if member_id == telegram_id:
+                            continue
+                        member: Player | None = await self.players.get_by_id(member_id)
+                        if member is not None:
+                            member.clan_id = None
+                            await self.players.save(member)
+                    await self.clans.delete(clan.id)
+                else:
+                    await self.clans.save(clan)
 
-        for card_id, player_card in list(self.player_cards.items.items()):
-            if player_card.owner_player_id == telegram_id:
-                await self.player_cards.delete(card_id)
+            for card_id, player_card in list(self.player_cards.items.items()):
+                if player_card.owner_player_id == telegram_id:
+                    await self.player_cards.delete(card_id)
 
-        for battle_pass_key in list(self.battle_pass_progress.items):
-            if battle_pass_key[0] == telegram_id:
-                await self.battle_pass_progress.delete(battle_pass_key)
-        for battle_pass_key in list(self.premium_battle_pass_progress.items):
-            if battle_pass_key[0] == telegram_id:
-                await self.premium_battle_pass_progress.delete(battle_pass_key)
-        for quest_key in list(self.quests.progress_items):
-            if quest_key[0] == telegram_id:
-                await self.quests.delete_progress(quest_key)
+            for battle_pass_key in list(self.battle_pass_progress.items):
+                if battle_pass_key[0] == telegram_id:
+                    await self.battle_pass_progress.delete(battle_pass_key)
+            for battle_pass_key in list(self.premium_battle_pass_progress.items):
+                if battle_pass_key[0] == telegram_id:
+                    await self.premium_battle_pass_progress.delete(battle_pass_key)
+            for quest_key in list(self.quests.progress_items):
+                if quest_key[0] == telegram_id:
+                    await self.quests.delete_progress(quest_key)
 
-        for battle_id, battle in list(self.battles.items.items()):
-            if telegram_id in {battle.player_one_id, battle.player_two_id}:
-                await self.battles.delete(battle_id)
-                self._clear_battle_round_drafts(battle_id)
+            for battle_id, battle in list(self.battles.items.items()):
+                if telegram_id in {battle.player_one_id, battle.player_two_id}:
+                    await self.battles.delete(battle_id)
+                    self._clear_battle_round_drafts(battle_id)
 
-        self.search_queue.pop(telegram_id, None)
-        self.deck_drafts.pop(telegram_id, None)
-        self.action_events[:] = [
-            event for event in self.action_events if event[0] != telegram_id
-        ]
+            self.search_queue.pop(telegram_id, None)
+            self.deck_drafts.pop(telegram_id, None)
+            self.action_events[:] = [
+                event for event in self.action_events if event[0] != telegram_id
+            ]
 
-        await self.players.delete(telegram_id)
-        self._persist_runtime_state()
-        return player
+            await self.players.delete(telegram_id)
+            self._persist_runtime_state()
+            return player
 
     async def select_profile_background(
         self, telegram_id: int, background_id: int | None
     ) -> Player:
         """Choose one owned profile background or clear the selection."""
 
-        player = await self.get_or_create_player(telegram_id)
-        if background_id is not None:
-            background = await self.profile_backgrounds.get_by_id(background_id)
-            if background is None:
-                raise EntityNotFoundError("profile background not found")
-        try:
-            player.select_profile_background(background_id)
-        except ValueError as error:
-            raise ForbiddenActionError(
-                "profile background is not in your collection"
-            ) from error
-        await self.players.save(player)
-        return player
+        async with self.write_transaction():
+            player = await self.get_or_create_player(telegram_id)
+            if background_id is not None:
+                background = await self.profile_backgrounds.get_by_id(background_id)
+                if background is None:
+                    raise EntityNotFoundError("profile background not found")
+            try:
+                player.select_profile_background(background_id)
+            except ValueError as error:
+                raise ForbiddenActionError(
+                    "profile background is not in your collection"
+                ) from error
+            await self.players.save(player)
+            return player
 
     async def list_top_players(
         self, mode: str, limit: int = 10
@@ -370,85 +380,92 @@ class PlayerProfileServiceMixin(TelegramServiceContext):
     ) -> FreeRewardSettings:
         """Persist card-rarity weights for the free reward."""
 
-        self._validate_weight_map(weights, "card weights")
-        self.free_card_weights = {
-            rarity: weights.get(rarity, 0) for rarity in _FREE_CARD_RARITIES
-        }
-        self._save_free_reward_settings()
-        return self.free_reward_settings()
+        async with self.write_transaction():
+            self._validate_weight_map(weights, "card weights")
+            self.free_card_weights = {
+                rarity: weights.get(rarity, 0) for rarity in _FREE_CARD_RARITIES
+            }
+            self._save_free_reward_settings()
+            return self.free_reward_settings()
 
     async def set_free_resource_weights(
         self, weights: dict[ResourceType, int]
     ) -> FreeRewardSettings:
         """Persist resource-type weights for the free reward."""
 
-        self._validate_weight_map(weights, "resource weights")
-        self.free_resource_weights = {
-            resource: weights.get(resource, 0) for resource in _FREE_RESOURCE_TYPES
-        }
-        self._save_free_reward_settings()
-        return self.free_reward_settings()
+        async with self.write_transaction():
+            self._validate_weight_map(weights, "resource weights")
+            self.free_resource_weights = {
+                resource: weights.get(resource, 0) for resource in _FREE_RESOURCE_TYPES
+            }
+            self._save_free_reward_settings()
+            return self.free_reward_settings()
 
     async def set_free_resource_values(
         self, values: dict[ResourceType, int]
     ) -> FreeRewardSettings:
         """Persist resource values for the free reward."""
 
-        if any(value <= 0 for value in values.values()):
-            raise ValidationError("resource values must be > 0")
-        self.free_resource_values = {
-            resource: values.get(resource, 0) for resource in _FREE_RESOURCE_TYPES
-        }
-        self._save_free_reward_settings()
-        return self.free_reward_settings()
+        async with self.write_transaction():
+            if any(value <= 0 for value in values.values()):
+                raise ValidationError("resource values must be > 0")
+            self.free_resource_values = {
+                resource: values.get(resource, 0) for resource in _FREE_RESOURCE_TYPES
+            }
+            self._save_free_reward_settings()
+            return self.free_reward_settings()
 
     async def deck_draft(self, telegram_id: int) -> list[int]:
         """Return or initialize the editable deck draft for a player."""
 
-        player = await self.get_or_create_player(telegram_id)
-        draft = self.deck_drafts.get(
-            telegram_id,
-            list(player.battle_deck.card_ids) if player.battle_deck else [],
-        )
-        owned = {card.id for card in await self.list_player_cards(telegram_id)}
-        draft = [card_id for card_id in draft if card_id in owned]
-        draft = self._unique_card_ids(draft)
-        self.deck_drafts[telegram_id] = draft
-        self._persist_runtime_state()
-        return list(draft)
+        async with self.write_transaction():
+            player = await self.get_or_create_player(telegram_id)
+            draft = self.deck_drafts.get(
+                telegram_id,
+                list(player.battle_deck.card_ids) if player.battle_deck else [],
+            )
+            owned = {card.id for card in await self.list_player_cards(telegram_id)}
+            draft = [card_id for card_id in draft if card_id in owned]
+            draft = self._unique_card_ids(draft)
+            self.deck_drafts[telegram_id] = draft
+            self._persist_runtime_state()
+            return list(draft)
 
     async def toggle_deck_draft_card(self, telegram_id: int, card_id: int) -> list[int]:
         """Toggle one owned card in the editable deck draft."""
 
-        await self.get_card(card_id, telegram_id)
-        draft = await self.deck_draft(telegram_id)
-        if card_id in draft:
-            draft.remove(card_id)
-        else:
-            if len(draft) >= 5:
-                raise ValidationError("в колоде можно выбрать не больше 5 карт")
-            draft.append(card_id)
-        self.deck_drafts[telegram_id] = draft
-        self._persist_runtime_state()
-        return list(draft)
+        async with self.write_transaction():
+            await self.get_card(card_id, telegram_id)
+            draft = await self.deck_draft(telegram_id)
+            if card_id in draft:
+                draft.remove(card_id)
+            else:
+                if len(draft) >= 5:
+                    raise ValidationError("в колоде можно выбрать не больше 5 карт")
+                draft.append(card_id)
+            self.deck_drafts[telegram_id] = draft
+            self._persist_runtime_state()
+            return list(draft)
 
     async def clear_deck_draft(self, telegram_id: int) -> list[int]:
         """Clear the editable deck draft."""
 
-        await self.get_or_create_player(telegram_id)
-        self.deck_drafts[telegram_id] = []
-        self._persist_runtime_state()
-        return []
+        async with self.write_transaction():
+            await self.get_or_create_player(telegram_id)
+            self.deck_drafts[telegram_id] = []
+            self._persist_runtime_state()
+            return []
 
     async def save_deck_draft(self, telegram_id: int) -> DeckSlots:
         """Persist the current draft as the player's battle deck."""
 
-        player = await self.get_or_create_player(telegram_id)
-        draft = await self.deck_draft(telegram_id)
-        self._ensure_valid_battle_deck_ids(draft)
-        player.battle_deck = DeckSlots(tuple(draft))
-        await self.players.save(player)
-        return player.battle_deck
+        async with self.write_transaction():
+            player = await self.get_or_create_player(telegram_id)
+            draft = await self.deck_draft(telegram_id)
+            self._ensure_valid_battle_deck_ids(draft)
+            player.battle_deck = DeckSlots(tuple(draft))
+            await self.players.save(player)
+            return player.battle_deck
 
     def _load_free_reward_settings(self) -> None:
         """Load persisted free reward settings when available."""

@@ -148,9 +148,13 @@ Current feature packages:
   and health checks
 - `sqlalchemy/models/`: ORM table definitions split by feature area
 
+### `src/shared/`
+- `observability.py`: process logging setup, including JSON log formatting
+
 ### `docker/`
 - `docker/Dockerfile`: production bot image
-- `compose.yaml`: production bot + PostgreSQL stack
+- `docker/compose.yaml`: production bot + PostgreSQL stack with non-root,
+  read-only bot runtime, health checks, JSON logs, and log rotation
 
 ## Storage Model
 The bot can run in three modes:
@@ -178,6 +182,8 @@ The bot can run in three modes:
 - The `scripts/stress_app.py` harness can be used to simulate concurrent
   players against this storage mode and report latency, throughput, CPU, and
   memory usage.
+- The container healthcheck checks database reachability, runtime table
+  availability, and the current Alembic revision.
 
 ## Where Logic Should Live
 

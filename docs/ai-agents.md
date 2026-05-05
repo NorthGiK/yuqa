@@ -31,6 +31,9 @@
 - `main.py` is only a launcher.
 - `src/main.py` is the runtime bootstrap.
 - `src/telegram/services/services.py` is the service container and storage selector.
+- `src/shared/observability.py` configures plain or JSON process logging.
+- `src/infrastructure/sqlalchemy/healthcheck.py` checks DB reachability,
+  runtime tables, and Alembic revision for containers.
 - `src/telegram/services/contracts.py` defines type-only mixin contracts for IDE completion.
 - `src/telegram/services/battles.py` owns battle drafting, round resolution, and matchmaking.
 - `src/telegram/services/battle_pass.py` owns battle pass seasons, levels, and progress.
@@ -188,4 +191,6 @@ Before expanding those files, confirm the logic cannot live in:
 - `src/telegram/decorators/quests.py`: quest decorator wiring for handlers.
 - `make stress`: local randomized service-level stress harness for the
   database-backed runtime.
-- `docker/compose.yaml`: production bot and PostgreSQL deployment stack.
+- `docker/compose.yaml`: production bot and PostgreSQL deployment stack with
+  non-root, read-only bot runtime and JSON log rotation.
+- `tests/test_deployment.py`: deployment-file drift checks.

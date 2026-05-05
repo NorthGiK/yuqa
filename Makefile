@@ -2,7 +2,7 @@
 UV_CACHE_DIR ?= $(CURDIR)/.cache/uv
 UV := env UV_CACHE_DIR=$(UV_CACHE_DIR) uv
 
-.PHONY: help sync run test test-file stress format lint clean db-upgrade docker-build agent-summary agent-check
+.PHONY: help sync run test test-file stress format lint clean db-upgrade docker-build docker-run agent-summary agent-check
 
 help:
 	@echo "Targets:"
@@ -15,6 +15,7 @@ help:
 	@echo "  make format     - format Python files with Ruff"
 	@echo "  make db-upgrade - apply Alembic migrations"
 	@echo "  make docker-build - build the production image"
+	@echo "  make docker-run   - run the production image with .env"
 	@echo "  make agent-summary - print a compact JSON repository map"
 	@echo "  make agent-check - validate architecture boundaries"
 	@echo "  make clean      - remove caches"
@@ -23,7 +24,7 @@ sync:
 	$(UV) sync --extra dev --extra docker
 
 run:
-	$(UV) run main.py
+	$(UV) run yuqa
 	make clean
 
 test:
@@ -40,7 +41,9 @@ stress:
 
 docker-build:
 	docker build -f docker/Dockerfile -t yuqa:latest ./
-	docker run yuqa:latest
+
+docker-run:
+	docker run --env-file .env yuqa:latest
 
 lint:
 	$(UV) run ruff check src tests main.py

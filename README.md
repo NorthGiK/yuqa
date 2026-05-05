@@ -31,6 +31,11 @@ make run
 By default the bot stores state in SQLite at `data/yuqa/yuqa.db`. Override it
 with `DATABASE_URL` to use PostgreSQL or another SQLAlchemy-supported database.
 
+Runtime logging is controlled by:
+
+- `YUQA_LOG_LEVEL`: standard Python log level, default `INFO`
+- `YUQA_LOG_FORMAT`: `plain` for local runs or `json` for containers
+
 ## Package layout
 
 The Telegram layer is split into package directories rather than one large flat
@@ -94,6 +99,22 @@ state changes commit together and roll back together on failure. This keeps
 quest rewards, battle updates, purchases, deck changes, and admin content
 changes consistent when several players act at the same time.
 
+## Observability
+
+Startup logs include sanitized runtime settings, migration start/finish timing,
+service initialization timing, Telegram polling lifecycle, and graceful shutdown
+events. Database passwords are hidden before URLs are written to logs.
+
+The deployment healthcheck can be run directly:
+
+```bash
+python -m src.infrastructure.sqlalchemy.healthcheck
+```
+
+It prints one JSON object and exits non-zero when the database is unreachable,
+required runtime tables are missing, or the database revision is not at the
+current Alembic head.
+
 ## AI-agent workflow
 
 The repository includes an agent-focused inspection script and guide:
@@ -150,20 +171,25 @@ docker build -f docker/Dockerfile -t yuqa:latest .
 ```
 
 The container image copies the application source, runs `uv sync` during build,
-and starts the bot with `uv run yuqa`. The image is built for PostgreSQL use, so
-set `DATABASE_URL` to a PostgreSQL connection string when running it. If you
-want persistent state outside the container, mount `/data` only for catalog
-artifacts or local experiments.
+installs from `uv.lock`, and starts the installed `yuqa` entrypoint. It does not
+copy `.env` into the image. The image is built for PostgreSQL use, so set
+`DATABASE_URL` to a PostgreSQL connection string when running it. If you want
+persistent state outside the container, mount `/data` only for catalog artifacts
+or local experiments.
 
 Production deploys should use `docker/compose.yaml`, which starts the bot and a
-PostgreSQL service together.
+PostgreSQL service together. The bot container runs as a non-root user with a
+read-only root filesystem, dropped Linux capabilities, `no-new-privileges`, a
+small `/tmp` tmpfs, JSON logs, log rotation, health checks, and a graceful stop
+period.
 
-## GitLab CI/CD
+## CI/CD guidance
 
-`.gitlab-ci.yml` runs lint and test stages, builds a versioned container image,
-and deploys it over SSH with `docker compose up -d --wait`.
+A deployment pipeline should run lint and tests, build a versioned container
+image, ship the production `.env` outside the image, and deploy
+`docker/compose.yaml` with `docker compose up -d --wait`.
 
-Required CI/CD variables:
+Typical deployment variables:
 
 - `DEPLOY_HOST`
 - `DEPLOY_USER`

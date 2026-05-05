@@ -1,6 +1,7 @@
 """Runtime settings for the Telegram layer."""
 
 from dataclasses import dataclass
+import logging
 from os import getenv
 from pathlib import Path
 
@@ -49,6 +50,24 @@ def _parse_bool(raw: str, *, default: bool) -> bool:
     raise ValueError(f"invalid boolean value: '{raw}'")
 
 
+def _parse_log_level(raw: str) -> str:
+    """Parse a standard logging level from the environment."""
+
+    value = (raw or "INFO").strip().upper()
+    if value not in logging.getLevelNamesMapping():
+        raise ValueError(f"invalid log level: '{raw}'")
+    return value
+
+
+def _parse_log_format(raw: str) -> str:
+    """Parse the configured log output format."""
+
+    value = (raw or "plain").strip().lower()
+    if value not in {"plain", "json"}:
+        raise ValueError("YUQA_LOG_FORMAT must be 'plain' or 'json'")
+    return value
+
+
 def _default_database_url(content_dir: Path) -> str:
     """Build the default SQLite URL inside the data directory."""
 
@@ -65,6 +84,8 @@ class Settings:
     content_dir: Path
     database_url: str
     auto_migrate: bool
+    log_level: str = "INFO"
+    log_format: str = "plain"
 
     @classmethod
     def from_env(cls) -> Settings:
@@ -78,4 +99,6 @@ class Settings:
             database_url=getenv("DATABASE_URL", "").strip()
             or _default_database_url(content_dir),
             auto_migrate=_parse_bool(getenv("YUQA_AUTO_MIGRATE", "true"), default=True),
+            log_level=_parse_log_level(getenv("YUQA_LOG_LEVEL", "INFO")),
+            log_format=_parse_log_format(getenv("YUQA_LOG_FORMAT", "plain")),
         )

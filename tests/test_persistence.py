@@ -9,12 +9,13 @@ from alembic import command
 import pytest
 
 from src.infrastructure.sqlalchemy.migrations import alembic_config
+from src.infrastructure.sqlalchemy.healthcheck import check_database
 from src.quests import QuestDefinition, QuestPeriod
 from src.cards.domain.entities import Ability
 from src.cards.domain.entities import PlayerCard
 from src.infrastructure.sqlalchemy.migrations import upgrade_head
 from src.infrastructure.sqlalchemy.repositories import create_sync_engine
-from src.infrastructure.sqlalchemy.urls import sync_database_url
+from src.infrastructure.sqlalchemy.urls import safe_database_url, sync_database_url
 from src.quests.domain.entities import QuestReward
 from src.shared.enums import (
     CardClass,
@@ -53,6 +54,15 @@ def test_sync_database_url_strips_async_sqlite_driver(tmp_path: Path) -> None:
     assert sync_database_url(database_url) == _sqlite_url(tmp_path / "yuqa.db")
 
 
+def test_safe_database_url_hides_password() -> None:
+    """Deployment logs should never print database passwords."""
+
+    assert (
+        safe_database_url("postgresql+psycopg2://yuqa:secret@db:5432/yuqa")
+        == "postgresql+psycopg2://yuqa:***@db:5432/yuqa"
+    )
+
+
 def test_migrations_accept_async_sqlite_url(tmp_path: Path) -> None:
     """Auto-migration should work when DATABASE_URL names aiosqlite."""
 
@@ -73,6 +83,31 @@ def test_migrations_accept_async_sqlite_url(tmp_path: Path) -> None:
 
     assert rows == [("players",)]
     assert legacy_rows == []
+
+
+def test_database_healthcheck_reports_ready_schema(tmp_path: Path) -> None:
+    """Container healthcheck should verify database reachability and revision."""
+
+    database_url = _sqlite_url(tmp_path / "health.db")
+    upgrade_head(database_url)
+
+    result = check_database(database_url)
+
+    assert result.healthy
+    assert result.status == "ok"
+    assert result.current_revision == result.expected_revision
+    assert result.database_driver == "sqlite"
+
+
+def test_database_healthcheck_rejects_unmigrated_database(tmp_path: Path) -> None:
+    """Container healthcheck should fail before migrations create runtime tables."""
+
+    result = check_database(_sqlite_url(tmp_path / "empty.db"))
+
+    assert result.healthy is False
+    assert result.status == "database_unavailable"
+    assert result.expected_revision is not None
+    assert "players" in (result.error or "")
 
 
 def test_migrations_copy_legacy_state_documents(tmp_path: Path) -> None:

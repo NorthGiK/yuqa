@@ -18,7 +18,13 @@ services:
         ]
       interval: 10s
       timeout: 5s
+      start_period: 10s
       retries: 5
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
 
   bot:
     image: ${YUQA_IMAGE:-yuqa:latest}
@@ -26,6 +32,14 @@ services:
       context: ..
       dockerfile: docker/Dockerfile
     restart: unless-stopped
+    init: true
+    user: "10001:10001"
+    read_only: true
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    stop_grace_period: 30s
     env_file:
       - ../.env
     environment:
@@ -33,8 +47,12 @@ services:
         postgresql+psycopg2://${POSTGRES_USER:-yuqa}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-yuqa}
       YUQA_AUTO_MIGRATE: "true"
       YUQA_DATA_DIR: /data
+      YUQA_LOG_FORMAT: ${YUQA_LOG_FORMAT:-json}
+      YUQA_LOG_LEVEL: ${YUQA_LOG_LEVEL:-INFO}
     volumes:
       - yuqa-data:/data
+    tmpfs:
+      - /tmp:size=64m,mode=1777
     depends_on:
       postgres:
         condition: service_healthy
@@ -42,8 +60,13 @@ services:
       test: ["CMD", "python", "-m", "src.infrastructure.sqlalchemy.healthcheck"]
       interval: 30s
       timeout: 5s
-      start_period: 20s
+      start_period: 30s
       retries: 3
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "5"
 
 volumes:
   postgres-data:

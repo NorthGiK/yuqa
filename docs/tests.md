@@ -26,6 +26,15 @@ Tests are organized by behavior rather than by package mirroring. Use the file w
 
 ## Tooling Tests
 - `test_agent_audit.py`
+- `test_deployment.py`
+
+## Runtime and Deployment Tests
+- `test_telegram_config.py` covers environment parsing, including logging
+  configuration.
+- `test_persistence.py` covers migration behavior, database restart behavior,
+  and the SQLAlchemy healthcheck.
+- `test_deployment.py` keeps Dockerfile, `.dockerignore`, compose hardening,
+  and the installed `yuqa` entrypoint from drifting.
 
 ## Stress Tests
 The local stress harness drives the same service layer used by Telegram

@@ -2,17 +2,24 @@
 
 from asyncio import run
 from dataclasses import dataclass
+import logging
+from time import perf_counter
 
 from aiogram import Bot
 
 from src.battles.domain.entities import Battle
 from src.infrastructure.sqlalchemy.migrations import upgrade_head
+from src.infrastructure.sqlalchemy.urls import safe_database_url
+from src.shared.observability import configure_logging
 from src.telegram.bot import build_bot, build_dispatcher
 from src.telegram.config import Settings
 from src.telegram.services import TelegramServices
 from src.telegram.services.contracts import BattleTimeoutNotifier
 from src.telegram.texts import battle_status_text
 from src.telegram.ui import battle_actions_markup
+
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass(slots=True)
@@ -27,14 +34,40 @@ def build_app() -> App:
     """Build the application state from environment variables."""
 
     settings = Settings.from_env()
+    configure_logging(level=settings.log_level, log_format=settings.log_format)
+    logger.info(
+        "runtime settings loaded",
+        extra={
+            "admin_count": len(settings.admin_ids),
+            "auto_migrate": settings.auto_migrate,
+            "content_dir": str(settings.content_dir),
+            "database_url": safe_database_url(settings.database_url),
+            "log_format": settings.log_format,
+        },
+    )
     if settings.auto_migrate:
+        started_at = perf_counter()
+        logger.info("database migration started")
         upgrade_head(settings.database_url)
+        logger.info(
+            "database migration finished",
+            extra={"duration_ms": round((perf_counter() - started_at) * 1000, 2)},
+        )
+    else:
+        logger.warning("automatic database migrations are disabled")
+
+    started_at = perf_counter()
+    services = TelegramServices(
+        settings.content_dir / "catalog.json",
+        database_url=settings.database_url,
+    )
+    logger.info(
+        "services initialized",
+        extra={"duration_ms": round((perf_counter() - started_at) * 1000, 2)},
+    )
     return App(
         settings=settings,
-        services=TelegramServices(
-            settings.content_dir / "catalog.json",
-            database_url=settings.database_url,
-        ),
+        services=services,
     )
 
 
@@ -48,9 +81,17 @@ async def main() -> None:
     )
     dispatcher = build_dispatcher(app.settings, app.services)
     try:
+        logger.info("telegram polling started")
         await dispatcher.start_polling(bot)
+        logger.info("telegram polling stopped")
+    except Exception:
+        logger.exception("telegram polling failed")
+        raise
     finally:
+        logger.info("application shutdown started")
         await app.services.shutdown()
+        await bot.session.close()
+        logger.info("application shutdown finished")
 
 
 def entrypoint() -> int:

@@ -71,6 +71,12 @@ def test_build_summary_includes_expected_entrypoints() -> None:
     assert summary["recommended_start_points"]["quest_orchestration"] == (
         "src/telegram/services/quests.py"
     )
+    assert summary["recommended_start_points"]["observability"] == (
+        "src/shared/observability.py"
+    )
+    assert summary["recommended_start_points"]["deployment_healthcheck"] == (
+        "src/infrastructure/sqlalchemy/healthcheck.py"
+    )
     assert summary["public_surfaces"]["router"]["implementation"] == (
         "src/telegram/router/router.py"
     )

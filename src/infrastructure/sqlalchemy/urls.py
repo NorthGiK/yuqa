@@ -21,6 +21,19 @@ def sync_database_url(database_url: str) -> str:
     return str(url.set(drivername=drivername))
 
 
+def safe_database_url(database_url: str) -> str:
+    """Return a log-safe database URL with any password hidden."""
+
+    url = make_url(sync_database_url(database_url))
+    return url.render_as_string(hide_password=True)
+
+
+def database_driver(database_url: str) -> str:
+    """Return the synchronous SQLAlchemy driver name for diagnostics."""
+
+    return make_url(sync_database_url(database_url)).drivername
+
+
 def ensure_sqlite_parent(database_url: str) -> None:
     """Create the parent directory for file-backed SQLite databases."""
 

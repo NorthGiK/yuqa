@@ -237,7 +237,15 @@ def _runtime_flow() -> list[dict[str, str]]:
         },
         {
             "path": "src/main.py",
-            "role": "Loads env settings, runs migrations, builds services, and starts polling.",
+            "role": "Loads env settings, configures logging, runs migrations, builds services, and starts polling.",
+        },
+        {
+            "path": "src/shared/observability.py",
+            "role": "Configures plain or JSON process logging for runtime and containers.",
+        },
+        {
+            "path": "src/infrastructure/sqlalchemy/healthcheck.py",
+            "role": "Checks DB reachability, runtime tables, and Alembic revision for container health.",
         },
         {
             "path": TELEGRAM_SERVICES_SURFACE,
@@ -338,7 +346,13 @@ def _module_groups() -> dict[str, list[str]]:
     """Return grouped edit paths for common tasks."""
 
     return {
-        "runtime_bootstrap": ["main.py", "src/main.py", "src/telegram/config.py"],
+        "runtime_bootstrap": [
+            "main.py",
+            "src/main.py",
+            "src/telegram/config.py",
+            "src/shared/observability.py",
+            "src/infrastructure/sqlalchemy/healthcheck.py",
+        ],
         "telegram_flow": [
             *TELEGRAM_ROUTER_GROUP,
             "src/telegram/states.py",
@@ -454,6 +468,8 @@ def build_summary() -> dict[str, object]:
             "test_file": "make test-file FILE=tests/test_shop.py",
             "lint": "make lint",
             "format": "make format",
+            "docker_build": "make docker-build",
+            "docker_run": "make docker-run",
             "agent_summary": "make agent-summary",
             "agent_check": "make agent-check",
         },
@@ -533,6 +549,10 @@ def build_summary() -> dict[str, object]:
             "telegram_copy": TELEGRAM_TEXTS_ENTRY,
             "telegram_markup": TELEGRAM_UI_ENTRY,
             "router_helpers": TELEGRAM_ROUTER_HELPERS,
+            "observability": "src/shared/observability.py",
+            "deployment_healthcheck": "src/infrastructure/sqlalchemy/healthcheck.py",
+            "deployment_image": "docker/Dockerfile",
+            "deployment_compose": "docker/compose.yaml",
             "local_storage": "src/infrastructure/local.py",
             "database_storage": "src/infrastructure/sqlalchemy/repositories.py",
         },

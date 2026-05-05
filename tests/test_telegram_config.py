@@ -28,6 +28,8 @@ def test_settings_from_env_reads_values(
         == f"sqlite:///{(tmp_path / 'yuqa.db').resolve().as_posix()}"
     )
     assert settings.auto_migrate is False
+    assert settings.log_level == "INFO"
+    assert settings.log_format == "plain"
 
 
 def test_settings_from_env_requires_token(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -64,3 +66,38 @@ def test_settings_from_env_accepts_custom_database_url(
     settings = Settings.from_env()
 
     assert settings.database_url == "sqlite:////tmp/yuqa-test.db"
+
+
+def test_settings_from_env_reads_logging_settings(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Logging settings should be explicit and deployment-friendly."""
+
+    monkeypatch.setenv("BOT_TOKEN", "token-123")
+    monkeypatch.setenv("ADMIN_IDS", "")
+    monkeypatch.setenv("YUQA_LOG_LEVEL", "debug")
+    monkeypatch.setenv("YUQA_LOG_FORMAT", "json")
+
+    settings = Settings.from_env()
+
+    assert settings.log_level == "DEBUG"
+    assert settings.log_format == "json"
+
+
+def test_settings_from_env_validates_logging_settings(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Invalid logging settings should fail before the bot starts."""
+
+    monkeypatch.setenv("BOT_TOKEN", "token-123")
+    monkeypatch.setenv("ADMIN_IDS", "")
+    monkeypatch.setenv("YUQA_LOG_LEVEL", "verbose")
+
+    with pytest.raises(ValueError, match="invalid log level"):
+        Settings.from_env()
+
+    monkeypatch.setenv("YUQA_LOG_LEVEL", "INFO")
+    monkeypatch.setenv("YUQA_LOG_FORMAT", "xml")
+
+    with pytest.raises(ValueError, match="YUQA_LOG_FORMAT"):
+        Settings.from_env()

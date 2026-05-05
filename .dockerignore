@@ -2,8 +2,16 @@ __pycache__/
 .pytest_cache/
 .ruff_cache/
 .venv/
+.cache/
+.codex
 .git/
 .gitlab/
+.env
+.env.*
+!.env.example
 data/
 tests/
+yuqa.db.sqlite
+*.sqlite
+*.db
 *.pyc

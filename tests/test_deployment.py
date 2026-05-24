@@ -51,4 +51,21 @@ def test_compose_hardens_bot_runtime() -> None:
     assert "tmpfs:" in compose
     assert "stop_grace_period: 30s" in compose
     assert "YUQA_LOG_FORMAT: ${YUQA_LOG_FORMAT:-json}" in compose
+    assert 'YUQA_METRICS_ENABLED: "true"' in compose
+    assert "prom/prometheus" in compose
+    assert "docker.elastic.co/elasticsearch/elasticsearch" in compose
+    assert "docker.elastic.co/kibana/kibana" in compose
+    assert "docker.elastic.co/beats/filebeat" in compose
     assert 'max-size: "10m"' in compose
+
+
+def test_observability_configs_are_present() -> None:
+    """Prometheus and Filebeat should have checked-in production configs."""
+
+    prometheus = (ROOT / "docker" / "prometheus.yml").read_text(encoding="utf-8")
+    filebeat = (ROOT / "docker" / "filebeat.yml").read_text(encoding="utf-8")
+
+    assert "job_name: yuqa-bot" in prometheus
+    assert "bot:9000" in prometheus
+    assert "filebeat.autodiscover:" in filebeat
+    assert "output.elasticsearch:" in filebeat

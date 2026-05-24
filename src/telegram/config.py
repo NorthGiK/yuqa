@@ -50,6 +50,18 @@ def _parse_bool(raw: str, *, default: bool) -> bool:
     raise ValueError(f"invalid boolean value: '{raw}'")
 
 
+def _parse_port(raw: str, *, name: str) -> int:
+    """Parse a TCP port from the environment."""
+
+    try:
+        port = int(raw)
+    except ValueError as error:
+        raise ValueError(f"{name} must be an integer port") from error
+    if not 1 <= port <= 65535:
+        raise ValueError(f"{name} must be between 1 and 65535")
+    return port
+
+
 def _parse_log_level(raw: str) -> str:
     """Parse a standard logging level from the environment."""
 
@@ -86,6 +98,9 @@ class Settings:
     auto_migrate: bool
     log_level: str = "INFO"
     log_format: str = "plain"
+    metrics_enabled: bool = False
+    metrics_host: str = "127.0.0.1"
+    metrics_port: int = 9000
 
     @classmethod
     def from_env(cls) -> Settings:
@@ -101,4 +116,11 @@ class Settings:
             auto_migrate=_parse_bool(getenv("YUQA_AUTO_MIGRATE", "true"), default=True),
             log_level=_parse_log_level(getenv("YUQA_LOG_LEVEL", "INFO")),
             log_format=_parse_log_format(getenv("YUQA_LOG_FORMAT", "plain")),
+            metrics_enabled=_parse_bool(
+                getenv("YUQA_METRICS_ENABLED", "false"),
+                default=False,
+            ),
+            metrics_host=getenv("YUQA_METRICS_HOST", "127.0.0.1").strip()
+            or "127.0.0.1",
+            metrics_port=_parse_port(getenv("YUQA_METRICS_PORT", "9000"), name="YUQA_METRICS_PORT"),
         )

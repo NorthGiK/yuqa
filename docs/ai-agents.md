@@ -192,5 +192,8 @@ Before expanding those files, confirm the logic cannot live in:
 - `make stress`: local randomized service-level stress harness for the
   database-backed runtime.
 - `docker/compose.yaml`: production bot and PostgreSQL deployment stack with
-  non-root, read-only bot runtime and JSON log rotation.
+  non-root, read-only bot runtime, JSON log rotation, Prometheus, Kibana,
+  Elasticsearch, and Filebeat.
+- `src/shared/metrics.py`: Prometheus metrics endpoint used by the production
+  compose stack.
 - `tests/test_deployment.py`: deployment-file drift checks.

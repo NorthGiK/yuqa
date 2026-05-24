@@ -150,11 +150,15 @@ Current feature packages:
 
 ### `src/shared/`
 - `observability.py`: process logging setup, including JSON log formatting
+- `metrics.py`: lightweight Prometheus `/metrics` endpoint for the bot process
 
 ### `docker/`
 - `docker/Dockerfile`: production bot image
 - `docker/compose.yaml`: production bot + PostgreSQL stack with non-root,
-  read-only bot runtime, health checks, JSON logs, and log rotation
+  read-only bot runtime, health checks, JSON logs, Prometheus, Kibana, and log
+  rotation
+- `docker/prometheus.yml`: Prometheus scrape config for the bot metrics endpoint
+- `docker/filebeat.yml`: Filebeat Docker autodiscovery config for JSON logs
 
 ## Storage Model
 The bot can run in three modes:
@@ -184,6 +188,8 @@ The bot can run in three modes:
   memory usage.
 - The container healthcheck checks database reachability, runtime table
   availability, and the current Alembic revision.
+- The bot can expose Prometheus metrics at `/metrics`; production compose
+  enables this internally for Prometheus.
 
 ## Where Logic Should Live
 

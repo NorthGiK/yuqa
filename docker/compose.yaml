@@ -49,6 +49,13 @@ services:
       YUQA_DATA_DIR: /data
       YUQA_LOG_FORMAT: ${YUQA_LOG_FORMAT:-json}
       YUQA_LOG_LEVEL: ${YUQA_LOG_LEVEL:-INFO}
+      YUQA_METRICS_ENABLED: "true"
+      YUQA_METRICS_HOST: 0.0.0.0
+      YUQA_METRICS_PORT: "9000"
+    labels:
+      co.elastic.logs/enabled: "true"
+      co.elastic.logs/json.keys_under_root: "true"
+      co.elastic.logs/json.add_error_key: "true"
     volumes:
       - yuqa-data:/data
     tmpfs:
@@ -68,6 +75,111 @@ services:
         max-size: "10m"
         max-file: "5"
 
+  prometheus:
+    image: prom/prometheus:v2.55.1
+    restart: unless-stopped
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+      - --web.enable-lifecycle
+    ports:
+      - "${PROMETHEUS_PORT:-9090}:9090"
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus-data:/prometheus
+    depends_on:
+      bot:
+        condition: service_started
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "wget -q --spider http://127.0.0.1:9090/-/healthy || exit 1",
+        ]
+      interval: 30s
+      timeout: 5s
+      start_period: 20s
+      retries: 3
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:8.15.5
+    restart: unless-stopped
+    environment:
+      discovery.type: single-node
+      xpack.security.enabled: "false"
+      ES_JAVA_OPTS: ${ELASTICSEARCH_JAVA_OPTS:--Xms512m -Xmx512m}
+    volumes:
+      - elasticsearch-data:/usr/share/elasticsearch/data
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "curl -fsS http://127.0.0.1:9200/_cluster/health?wait_for_status=yellow&timeout=5s >/dev/null || exit 1",
+        ]
+      interval: 30s
+      timeout: 10s
+      start_period: 60s
+      retries: 5
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  kibana:
+    image: docker.elastic.co/kibana/kibana:8.15.5
+    restart: unless-stopped
+    environment:
+      ELASTICSEARCH_HOSTS: http://elasticsearch:9200
+    ports:
+      - "${KIBANA_PORT:-5601}:5601"
+    depends_on:
+      elasticsearch:
+        condition: service_healthy
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "curl -fsS http://127.0.0.1:5601/api/status >/dev/null || exit 1",
+        ]
+      interval: 30s
+      timeout: 10s
+      start_period: 60s
+      retries: 5
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  filebeat:
+    image: docker.elastic.co/beats/filebeat:8.15.5
+    restart: unless-stopped
+    user: root
+    command:
+      - --strict.perms=false
+    volumes:
+      - ./filebeat.yml:/usr/share/filebeat/filebeat.yml:ro
+      - /var/lib/docker/containers:/var/lib/docker/containers:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - filebeat-data:/usr/share/filebeat/data
+    depends_on:
+      elasticsearch:
+        condition: service_healthy
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
 volumes:
   postgres-data:
   yuqa-data:
+  prometheus-data:
+  elasticsearch-data:
+  filebeat-data:

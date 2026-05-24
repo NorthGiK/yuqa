@@ -35,6 +35,9 @@ Runtime logging is controlled by:
 
 - `YUQA_LOG_LEVEL`: standard Python log level, default `INFO`
 - `YUQA_LOG_FORMAT`: `plain` for local runs or `json` for containers
+- `YUQA_METRICS_ENABLED`: enables the Prometheus `/metrics` endpoint
+- `YUQA_METRICS_HOST`: bind host for metrics, default `127.0.0.1`
+- `YUQA_METRICS_PORT`: bind port for metrics, default `9000`
 
 ## Package layout
 
@@ -104,6 +107,15 @@ changes consistent when several players act at the same time.
 Startup logs include sanitized runtime settings, migration start/finish timing,
 service initialization timing, Telegram polling lifecycle, and graceful shutdown
 events. Database passwords are hidden before URLs are written to logs.
+
+When `YUQA_METRICS_ENABLED=true`, the bot exposes Prometheus metrics at
+`/metrics`. The production compose file enables this endpoint internally on
+`bot:9000`, and `docker/prometheus.yml` scrapes it as the `yuqa-bot` job.
+
+The production compose file also includes a single-node Elasticsearch, Kibana,
+and Filebeat stack. The bot writes JSON logs to stdout, Docker keeps them with
+log rotation, and Filebeat ships containers with the Yuqa log labels into
+Elasticsearch so they can be searched in Kibana.
 
 The deployment healthcheck can be run directly:
 
@@ -178,10 +190,16 @@ persistent state outside the container, mount `/data` only for catalog artifacts
 or local experiments.
 
 Production deploys should use `docker/compose.yaml`, which starts the bot and a
-PostgreSQL service together. The bot container runs as a non-root user with a
-read-only root filesystem, dropped Linux capabilities, `no-new-privileges`, a
-small `/tmp` tmpfs, JSON logs, log rotation, health checks, and a graceful stop
-period.
+PostgreSQL service together. It also starts Prometheus for metrics and
+Elasticsearch, Kibana, and Filebeat for log search. The bot container runs as a
+non-root user with a read-only root filesystem, dropped Linux capabilities,
+`no-new-privileges`, a small `/tmp` tmpfs, JSON logs, log rotation, health
+checks, and a graceful stop period.
+
+Default observability URLs after `docker compose -f docker/compose.yaml up -d`:
+
+- Prometheus: `http://localhost:9090`
+- Kibana: `http://localhost:5601`
 
 ## CI/CD guidance
 

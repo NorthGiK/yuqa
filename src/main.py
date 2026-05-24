@@ -10,6 +10,7 @@ from aiogram import Bot
 from src.battles.domain.entities import Battle
 from src.infrastructure.sqlalchemy.migrations import upgrade_head
 from src.infrastructure.sqlalchemy.urls import safe_database_url
+from src.shared.metrics import MetricsServer
 from src.shared.observability import configure_logging
 from src.telegram.bot import build_bot, build_dispatcher
 from src.telegram.config import Settings
@@ -43,6 +44,7 @@ def build_app() -> App:
             "content_dir": str(settings.content_dir),
             "database_url": safe_database_url(settings.database_url),
             "log_format": settings.log_format,
+            "metrics_enabled": settings.metrics_enabled,
         },
     )
     if settings.auto_migrate:
@@ -76,11 +78,17 @@ async def main() -> None:
 
     app = build_app()
     bot = build_bot(app.settings)
+    metrics_server = MetricsServer(
+        enabled=app.settings.metrics_enabled,
+        host=app.settings.metrics_host,
+        port=app.settings.metrics_port,
+    )
     app.services.configure_battle_timeout_notifier(
         _build_battle_timeout_notifier(bot, app.services)
     )
     dispatcher = build_dispatcher(app.settings, app.services)
     try:
+        await metrics_server.start()
         logger.info("telegram polling started")
         await dispatcher.start_polling(bot)
         logger.info("telegram polling stopped")
@@ -89,6 +97,7 @@ async def main() -> None:
         raise
     finally:
         logger.info("application shutdown started")
+        await metrics_server.stop()
         await app.services.shutdown()
         await bot.session.close()
         logger.info("application shutdown finished")

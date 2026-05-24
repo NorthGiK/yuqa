@@ -2,6 +2,7 @@
 
 from typing import NewType
 
+
 PlayerId = NewType("PlayerId", int)
 CardTemplateId = NewType("CardTemplateId", int)
 PlayerCardId = NewType("PlayerCardId", int)

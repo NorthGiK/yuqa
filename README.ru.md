@@ -36,6 +36,9 @@ SQLAlchemy.
 
 - `YUQA_LOG_LEVEL`: стандартный уровень логирования Python, по умолчанию `INFO`
 - `YUQA_LOG_FORMAT`: `plain` для локального запуска или `json` для контейнеров
+- `YUQA_METRICS_ENABLED`: включает Prometheus endpoint `/metrics`
+- `YUQA_METRICS_HOST`: host для bind metrics endpoint, по умолчанию `127.0.0.1`
+- `YUQA_METRICS_PORT`: port для metrics endpoint, по умолчанию `9000`
 
 ## Структура пакетов
 
@@ -105,6 +108,15 @@ await services.complete_action_quest(
 При старте приложение пишет в логи очищенные runtime-настройки, время миграций,
 время инициализации сервисов, жизненный цикл Telegram polling и graceful
 shutdown. Пароли в database URL скрываются перед записью в лог.
+
+Если `YUQA_METRICS_ENABLED=true`, бот открывает Prometheus endpoint `/metrics`.
+Production compose включает этот endpoint внутри сети Docker на `bot:9000`, а
+`docker/prometheus.yml` собирает его как job `yuqa-bot`.
+
+Production compose также включает single-node Elasticsearch, Kibana и Filebeat.
+Бот пишет JSON-логи в stdout, Docker хранит их с ротацией, а Filebeat отправляет
+контейнеры с Yuqa log labels в Elasticsearch, чтобы их можно было искать в
+Kibana.
 
 Healthcheck можно запустить отдельно:
 
@@ -180,10 +192,16 @@ entrypoint `yuqa`. `.env` не копируется внутрь образа. �
 `/data` только для каталога или локальных экспериментов.
 
 Для продакшена используйте `docker/compose.yaml`: он поднимает бота и
-PostgreSQL вместе. Контейнер бота работает не от root, с read-only root
-filesystem, сброшенными Linux capabilities, `no-new-privileges`, небольшим
-`/tmp` tmpfs, JSON-логами, ротацией логов, healthcheck и временем на graceful
-stop.
+PostgreSQL вместе. Он также запускает Prometheus для метрик и Elasticsearch,
+Kibana и Filebeat для поиска по логам. Контейнер бота работает не от root, с
+read-only root filesystem, сброшенными Linux capabilities, `no-new-privileges`,
+небольшим `/tmp` tmpfs, JSON-логами, ротацией логов, healthcheck и временем на
+graceful stop.
+
+Стандартные URL после `docker compose -f docker/compose.yaml up -d`:
+
+- Prometheus: `http://localhost:9090`
+- Kibana: `http://localhost:5601`
 
 ## CI/CD
 

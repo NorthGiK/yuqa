@@ -30,6 +30,9 @@ def test_settings_from_env_reads_values(
     assert settings.auto_migrate is False
     assert settings.log_level == "INFO"
     assert settings.log_format == "plain"
+    assert settings.metrics_enabled is False
+    assert settings.metrics_host == "127.0.0.1"
+    assert settings.metrics_port == 9000
 
 
 def test_settings_from_env_requires_token(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -100,4 +103,35 @@ def test_settings_from_env_validates_logging_settings(
     monkeypatch.setenv("YUQA_LOG_FORMAT", "xml")
 
     with pytest.raises(ValueError, match="YUQA_LOG_FORMAT"):
+        Settings.from_env()
+
+
+def test_settings_from_env_reads_metrics_settings(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Prometheus metrics endpoint settings should be deployment configurable."""
+
+    monkeypatch.setenv("BOT_TOKEN", "token-123")
+    monkeypatch.setenv("ADMIN_IDS", "")
+    monkeypatch.setenv("YUQA_METRICS_ENABLED", "true")
+    monkeypatch.setenv("YUQA_METRICS_HOST", "0.0.0.0")
+    monkeypatch.setenv("YUQA_METRICS_PORT", "9100")
+
+    settings = Settings.from_env()
+
+    assert settings.metrics_enabled is True
+    assert settings.metrics_host == "0.0.0.0"
+    assert settings.metrics_port == 9100
+
+
+def test_settings_from_env_validates_metrics_port(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Invalid metrics ports should fail before runtime binding."""
+
+    monkeypatch.setenv("BOT_TOKEN", "token-123")
+    monkeypatch.setenv("ADMIN_IDS", "")
+    monkeypatch.setenv("YUQA_METRICS_PORT", "70000")
+
+    with pytest.raises(ValueError, match="YUQA_METRICS_PORT"):
         Settings.from_env()
